@@ -106,25 +106,25 @@ class Api:
     """Called from the page (window.pywebview.api.*); UI work hops to the main thread."""
 
     def __init__(self):
-        self.browser = None
+        self._browser = None
 
     def browser_place(self, x, y, w, hgt):
-        AppHelper.callAfter(self.browser.place, float(x), float(y), float(w), float(hgt))
+        AppHelper.callAfter(self._browser.place, float(x), float(y), float(w), float(hgt))
 
     def browser_hide(self):
-        AppHelper.callAfter(self.browser.hide)
+        AppHelper.callAfter(self._browser.hide)
 
     def browser_go(self, url):
         if url.startswith("https://www.songsterr.com"):
-            AppHelper.callAfter(self.browser.go, url)
+            AppHelper.callAfter(self._browser.go, url)
 
     def browser_search(self, text):
         import urllib.parse
-        AppHelper.callAfter(self.browser.go, f"{h.SONGSTERR}/?pattern={urllib.parse.quote(text)}")
+        AppHelper.callAfter(self._browser.go, f"{h.SONGSTERR}/?pattern={urllib.parse.quote(text)}")
 
     def browser_nav(self, what):
-        AppHelper.callAfter({"back": self.browser.back, "forward": self.browser.forward,
-                             "reload": self.browser.reload}[what])
+        AppHelper.callAfter({"back": self._browser.back, "forward": self._browser.forward,
+                             "reload": self._browser.reload}[what])
 
     def open_spotify_song(self):
         sp = h.spotify_now()
@@ -145,7 +145,7 @@ def start_session(api):
         song = h.songsterr_find(sp["title"], sp["artist"])
         if song:
             SESSION["start_url"] = song["url"]
-            AppHelper.callAfter(api.browser.go, song["url"])
+            AppHelper.callAfter(api._browser.go, song["url"])
             log(f"Opened \"{song['title']}\" by {song['artist']} in the SONGSTERR tab (what Spotify was playing).")
         else:
             log(f"Couldn't find \"{sp['title']}\" on Songsterr. Search for it in the SONGSTERR tab.")
@@ -211,13 +211,13 @@ def main():
     api = Api()
     window = webview.create_window("MasterPrac", f"http://127.0.0.1:{PORT}/", js_api=api,
                                    width=min(1400, W), height=min(900, H), min_size=(900, 600))
-    api.browser = Browser(window)
+    api._browser = Browser(window)
     window.events.closing += end_session
 
     def on_start():
         AppHelper.callAfter(lambda: NSApp.activateIgnoringOtherApps_(True))  # open in front
         threading.Thread(target=start_session, args=(api,), daemon=True).start()
-        AppHelper.callLater(2.0, watch_browser, api.browser)
+        AppHelper.callLater(2.0, watch_browser, api._browser)
 
         def count_practice():  # time with a song open counts as practice
             import time
