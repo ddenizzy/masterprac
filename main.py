@@ -317,6 +317,17 @@ def main():
     api._browser = Browser(window)
     window.events.closing += end_session
 
+    def show_window():
+        def front():
+            w = window.native
+            if w.isMiniaturized():
+                w.deminiaturize_(None)
+            w.makeKeyAndOrderFront_(None)
+            NSApp.activateIgnoringOtherApps_(True)
+        AppHelper.callAfter(front)
+    import server
+    server.SHOW_WINDOW["fn"] = show_window
+
     def polite_quit(*_):  # macOS / logout / Terminal asking us to stop: tidy up like the close button would
         end_session()
         AppHelper.callAfter(window.destroy)

@@ -30,6 +30,17 @@ def _same_origin_only():
         return jsonify({"error": "Not allowed from another website."}), 403
 
 
+SHOW_WINDOW = {"fn": None}  # set by main.py: bring the window to the front
+
+
+@app.post("/api/window/show")
+def window_show():
+    """MasterPrac.app opened again while already running: just show the window."""
+    if SHOW_WINDOW["fn"]:
+        SHOW_WINDOW["fn"]()
+    return jsonify({"ok": True})
+
+
 @app.post("/api/jslog")
 def jslog():
     b = request.get_json(force=True) or {}
