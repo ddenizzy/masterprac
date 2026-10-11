@@ -81,6 +81,55 @@ def _events(track, times):
     return ev
 
 
+NOTE_FLAGS = (("bend", "b"), ("slide", "s"), ("hp", "h"), ("dead", "x"), ("leftHandVibrato", "v"), ("tie", "t"),
+              ("harmonic", "H"), ("ghost", "g"))
+
+
+def _tab_beats(track, times):
+    """Every beat of the shown part, for drawing the tab: [t, dur, bar, [[string, fret, flags]], beat_flags, text].
+    flags: b bend, s slide, h hammer-on/pull-off, x muted, v vibrato, t tied, H harmonic, g ghost;
+    beat_flags: pm palm mute, lr let ring, tr tremolo picking."""
+    out = []
+    for bi, ((start, end), m) in enumerate(zip(times, track["measures"])):
+        for v in m.get("voices", [])[:1]:
+            pos, beats = 0.0, v.get("beats", [])
+            total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1
+            for b in beats:
+                frac = b["duration"][0] / b["duration"][1] / total
+                notes = [[n["string"], n["fret"], "".join(c for k, c in NOTE_FLAGS if n.get(k))]
+                         for n in b.get("notes", []) if "fret" in n and not n.get("rest")]
+                bf = " ".join(f for k, f in (("palmMute", "pm"), ("letRing", "lr"), ("tremolo", "tr")) if b.get(k))
+                text = (b.get("text") or {}).get("text", "")
+                if notes or text:
+                    out.append([round(start + pos * (end - start), 3), round(frac * (end - start), 3), bi, notes, bf, text])
+                pos += frac
+    return out
+
+
+def _written_chords(tracks, n_bars):
+    """Chord names the tab's author wrote above the music (first one per bar), or None if there are few."""
+    out = [""] * n_bars
+    for t in tracks:
+        for i, m in enumerate(t["measures"][:n_bars]):
+            if out[i]:
+                continue
+            for v in m.get("voices", [])[:1]:
+                for b in v.get("beats", []):
+                    name = (b.get("chord") or {}).get("text", "")
+                    if name and not out[i]:
+                        out[i] = name
+    return out if sum(1 for c in out if c) >= max(3, n_bars // 8) else None
+
+
+TUNINGS = {(64, 59, 55, 50, 45, 40): "Standard", (64, 59, 55, 50, 45, 38): "Drop D",
+           (63, 58, 54, 49, 44, 39): "Half step down (Eb)", (62, 57, 53, 48, 43, 38): "Whole step down (D)",
+           (62, 57, 53, 48, 43, 36): "Drop C", (63, 58, 54, 49, 44, 37): "Drop C#"}
+
+
+def tuning_name(tuning):
+    return TUNINGS.get(tuple(tuning)) or " ".join(NOTES[x % 12] for x in reversed(tuning))
+
+
 def _bar_weights(track, i):
     """How much each pitch class sounds in bar i of a track (by note length); also its lowest note."""
     w, low = [0.0] * 12, None
@@ -138,7 +187,7 @@ def _key(tracks_notes):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v2-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -175,6 +224,9 @@ def load(song_id, lead_index=None):
         "bars": [{"t": round(s, 3), "end": round(e, 3), "section": (m.get("marker") or {}).get("text", ""), "chord": c}
                  for (s, e), m, c in zip(times, lt["measures"], _bar_chords(harmony, bass, len(lt["measures"])))],
         "events": _events(lt, times),
+        "beats": _tab_beats(lt, times),
+        "tuning_name": tuning_name(tuning),
+        "tempo": next((a["bpm"] for a in lt.get("automations", {}).get("tempo", [])), None),
         "key": _key(pcs),
     }
     # a major chord that doesn't fit the key but whose minor does (B in B minor, missing its 3rd): use the minor
@@ -186,5 +238,13 @@ def load(song_id, lead_index=None):
             r = NOTES.index(m.group(1))
             if (r + 4) % 12 not in scale and (r + 3) % 12 in scale:
                 b["chord"] = m.group(1) + "m"
+    # chord names written in the tab beat the ones worked out from the notes
+    written = _written_chords([lt] + harmony, len(out["bars"]))
+    if written:
+        last = ""
+        for b, c in zip(out["bars"], written):
+            last = c or last
+            b["chord"] = last or b["chord"]
+        out["chords_written"] = True
     cache.write_text(json.dumps(out))
     return out

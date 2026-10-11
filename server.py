@@ -110,20 +110,6 @@ def ask():
         return jsonify({"error": f"Claude couldn't answer: {str(e)[:150]}"}), 502
 
 
-@app.get("/api/tab")
-def tab():
-    """The open song's lead guitar notes + bar timing + chords + key (from Songsterr), for the fretboard."""
-    import tabs
-    song = SESSION.get("song")
-    if not song:
-        return jsonify({"error": "Open a song in the Songsterr tab first."}), 404
-    lead = request.args.get("lead", type=int)
-    try:
-        return jsonify(tabs.load(song["id"], lead))
-    except Exception as e:
-        return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
-
-
 # ---------- NOW PLAYING: whatever plays on the Mac, in any app ----------
 _matches = {}  # "title|artist" -> Songsterr match (or None), looked up once
 
@@ -148,15 +134,6 @@ def now_tab(song_id):
         return jsonify(tabs.load(song_id))
     except Exception as e:
         return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
-
-
-@app.get("/api/pos")
-def pos():
-    """Where Spotify is in the song right now (it keeps playing muted), for following the tab."""
-    import time
-    p = h.spotify_position()
-    p["at"] = time.time()
-    return jsonify(p)
 
 
 @app.get("/api/live")

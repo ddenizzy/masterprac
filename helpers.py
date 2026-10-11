@@ -218,6 +218,11 @@ def _norm(s):
 
 def now_playing():
     """{'title', 'artist', 'app', 'playing', 'pos', 'duration', 'at'} for whatever plays on the Mac, or {'playing': False}."""
+    fake = DATA / "fake_now.json"  # for testing without playing music: {"title", "artist", "app", "start": epoch seconds}
+    if fake.exists():
+        f = json.loads(fake.read_text())
+        return {"title": f["title"], "artist": f["artist"], "raw_title": f["title"], "app": f.get("app", "Test"), "playing": True,
+                "pos": time.time() - f["start"], "duration": f.get("duration", 240), "at": time.time()}
     try:
         out = subprocess.run(["/usr/bin/perl", str(TOOLS / "nowplaying.pl"), str(_np_lib())],
                              capture_output=True, text=True, timeout=6).stdout
