@@ -99,15 +99,25 @@ function guessKey(acc) {
   return best;
 }
 // best major/minor triad for the 12 note strengths
-function detectChord(c) {
-  let best = null;
+// chords that belong to the key (I ii iii IV V vi for major, i III iv v VI VII for minor) get a bonus:
+// the band mostly plays those, so passing notes can't flip the display to a random chord
+function inKey(root, q, key) {
+  if (!key) return false;
+  const deg = (root - key.root + 12) % 12;
+  const major = { 0: "", 2: "m", 4: "m", 5: "", 7: "", 9: "m" }, minor = { 0: "m", 3: "", 5: "m", 7: "m", 8: "", 10: "" };
+  return (key.minor ? minor : major)[deg] === q || (key.minor && deg === 7 && q === "");  // + the major V in minor
+}
+function detectChord(c, key) {
+  let best = null, second = null;
   for (let r = 0; r < 12; r++) for (const [shape, q] of [[[0, 4, 7], ""], [[0, 3, 7], "m"]]) {
     const tones = shape.map((i) => (r + i) % 12);
     const on = tones.reduce((s, t) => s + c[t], 0) + c[r] * 0.5;  // the root counts a bit extra
     const off = c.reduce((s, v, i) => s + (tones.includes(i) ? 0 : v), 0) / 9;
-    const score = on - off * 2;
-    if (!best || score > best.score) best = { root: r, q, tones, score };
+    const score = on - off * 2 + (inKey(r, q, key) ? 0.25 : 0);
+    const cand = { root: r, q, tones, score };
+    if (!best || score > best.score) { second = best; best = cand; } else if (!second || score > second.score) second = cand;
   }
+  best.margin = best.score - (second ? second.score : 0);
   return best;
 }
 
@@ -161,32 +171,53 @@ function showKey() {
   if (k && !live.userScale) $("#scale").value = k.minor ? "minor pentatonic" : "major pentatonic";
 }
 
-// ~8 times a second while the LIVE NOTES tab is open
+// ~8 times a second while the LIVE NOTES tab is open. Stable on purpose (from chord-recognition research):
+// the sound is averaged over ~1.2 s, chords in the key are preferred, and a new chord has to keep winning for
+// about one bar (from the song's tempo) before the display changes. HOLD freezes chord and key.
+const POLL = 120;
+let smooth = Array(12).fill(0), challenger = null, challengerSince = 0, keyGuess = null, keyGuessSince = 0;
+const barSeconds = () => Math.min(3, Math.max(1.2, 4 * 60 / (live.bpm || 100)));
 async function pollLive() {
   if (tab !== "notes") return;
   let d;
   try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
   if (!d.live || d.rms < 0.004) {
-    $("#live-status").textContent = d.error || "Silent: play the song (Songsterr's player or Spotify) and the chord follows it live.";
+    $("#live-status").textContent = d.error || "Silent: play the song (Songsterr's player or Spotify) and the chord follows it.";
     return;
   }
-  $("#live-status").textContent = "Listening to the music live.";
-  live.chroma = d.chroma;
-  live.acc = live.acc.map((v, i) => v * 0.995 + d.chroma[i]);  // long memory for guessing the key
-  const c = detectChord(d.chroma);
-  live.history = [...live.history.slice(-5), `${c.root}${c.q}`];
-  const votes = live.history.filter((x) => x === `${c.root}${c.q}`).length;
-  if (votes >= 3 && (!live.chord || `${live.chord.root}${live.chord.q}` !== `${c.root}${c.q}`)) {  // steady for ~0.4 s
-    live.chord = c;
-    $("#now-chord").textContent = NOTES[c.root] + c.q;
-    highlightProg(NOTES[c.root] + c.q);
-    drawBoard();
-  }
-  if (live.keySrc !== "from the song guide") {
-    const k = guessKey(live.acc);
-    if (!live.key || live.key.root !== k.root || live.key.minor !== k.minor) { live.key = k; live.keySrc = "heard from the music"; showKey(); drawBoard(); }
-  }
   if (d.onset) { const b = $("#beat"); b.classList.remove("on"); void b.offsetWidth; b.classList.add("on"); }
+  if (live.hold) { $("#live-status").textContent = "On hold: chord and key are frozen. Press Hold again to follow the song."; return; }
+  $("#live-status").textContent = `Following the song: a chord change shows after about ${barSeconds().toFixed(1)} s (one bar).`;
+  let c = d.chroma;
+  if ($("#focus").value === "guitar" && d.chroma_mid) c = d.chroma_mid;
+  const k = Math.exp(-POLL / 1000 / 1.2);  // ~1.2 s memory
+  smooth = smooth.map((v, i) => v * k + c[i] * (1 - k));
+  live.acc = live.acc.map((v, i) => v * 0.997 + c[i]);  // long memory for guessing the key
+  const cand = detectChord(smooth, live.key), now = performance.now() / 1000;
+  const id = (x) => x && `${x.root}${x.q}`;
+  if (!live.chord) { setChord(cand); }
+  else if (id(cand) === id(live.chord)) { challenger = null; }
+  else {
+    if (id(cand) !== id(challenger)) { challenger = cand; challengerSince = now; }
+    if (now - challengerSince >= barSeconds() && cand.margin > 0.05) { setChord(cand); challenger = null; }
+  }
+  if (live.keySrc !== "from the song guide") {  // no guide key: change the key only after ~10 steady seconds
+    const g = guessKey(live.acc);
+    if (!keyGuess || g.root !== keyGuess.root || g.minor !== keyGuess.minor) { keyGuess = g; keyGuessSince = now; }
+    if ((!live.key || now - keyGuessSince > 10) && (!live.key || live.key.root !== g.root || live.key.minor !== g.minor)) {
+      live.key = g; live.keySrc = "heard from the music"; showKey(); drawBoard();
+    }
+  }
+}
+function setChord(c) {
+  live.chord = c;
+  const name = NOTES[c.root] + c.q;
+  $("#now-chord").textContent = name;
+  live.trail = [...(live.trail || []), name].slice(-10);
+  $("#trail").innerHTML = `<span class="now-label">HEARD</span> ` + live.trail.map((n, i) =>
+    `<span class="ch ${i === live.trail.length - 1 ? "now" : ""}">${n}</span>`).join("");
+  highlightProg(name);
+  drawBoard();
 }
 setInterval(pollLive, 120);
 
@@ -223,6 +254,7 @@ async function loadGuide() {
     guideFor = g.song_id;
     const k = parseKey(x.key);
     if (k) { live.key = k; live.keySrc = "from the song guide"; live.userScale = false; showKey(); drawBoard(); }
+    live.bpm = x.tempo_bpm || 100;
     $("#prog").innerHTML = x.chords ? `<span class="now-label">PROGRESSION</span> ${esc(x.chords).replace(/\b([A-G][#b]?m?(?:7|maj7|sus[24]|add9|5)?)\b/g, '<span class="ch">$1</span>')}` : "";
     $("#guide-ready").classList.toggle("hidden", guideSeen === g.song_id || tab === "amp");
   }
@@ -289,6 +321,7 @@ loadSongs();
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.id === "hold") { live.hold = !live.hold; b.classList.toggle("on", live.hold); b.textContent = live.hold ? "Holding" : "Hold"; }
   if (b.dataset.go) { if (b.dataset.go === "amp") guideSeen = guideFor; setTab(b.dataset.go); $("#guide-ready").classList.add("hidden"); }
   if (b.id === "fav-btn") { await fetch("/api/songs/fav", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); loadSongs(); toast("Saved in My songs"); }
   if (b.dataset.unfav) { await fetch("/api/songs/fav", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: Number(b.dataset.unfav) }) }); loadSongs(); }

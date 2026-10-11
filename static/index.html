@@ -44,6 +44,8 @@
       <div class="controls">
         <label>Scale <select id="scale"></select></label>
         <label>Show <select id="labels"><option value="names">Note names</option><option value="intervals">Intervals (R, b3, 5)</option></select></label>
+        <label>Listen to <select id="focus"><option value="band">Whole band</option><option value="guitar">Guitar range</option></select></label>
+        <button class="ghost" id="hold" title="Freeze the chord and key while you work on something">Hold</button>
         <label>Area <select id="area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
       </div>
     </div>
@@ -55,6 +57,7 @@
       <span class="sub" id="live-status">Play the song (Songsterr's player or Spotify) and the chord follows it live.</span>
     </div>
     <div class="prog" id="prog"></div>
+    <div class="trail" id="trail" title="The last chords heard, newest on the right"></div>
   </section>
 
   <!-- AMP & TONE -->
