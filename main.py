@@ -19,7 +19,24 @@ import webview
 from AppKit import NSApp, NSMakeRect, NSScreen
 from Foundation import NSURL, NSURLRequest
 from PyObjCTools import AppHelper
-from WebKit import WKWebView, WKWebViewConfiguration
+import objc
+from Foundation import NSObject, NSUUID
+from WebKit import WKWebView, WKWebViewConfiguration, WKWebsiteDataStore
+
+# look like Safari: some sign-ins (Google) refuse "embedded" browsers
+SAFARI_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+             "Version/18.0 Safari/605.1.15")
+# one fixed, permanent website-data store for MasterPrac's browser: your Songsterr login (cookies) survives restarts
+STORE_ID = "6F0C2B8E-5A1D-4C7B-9E3F-4D2A8B6C1E70"
+
+
+class PopupDelegate(NSObject, protocols=[objc.protocolNamed("WKUIDelegate")]):
+    """Sign-in buttons open a pop-up window (window.open): show it in the same browser instead of dropping it."""
+
+    def webView_createWebViewWithConfiguration_forNavigationAction_windowFeatures_(self, view, cfg, action, features):
+        if action.request() is not None:
+            view.loadRequest_(action.request())
+        return None
 
 import helpers as h
 from server import PORT, SESSION, app, log
@@ -37,7 +54,17 @@ class Browser:
         if self.view is None:
             content = self.window.native.contentView()
             cfg = WKWebViewConfiguration.alloc().init()
+            try:  # macOS 14+: a named persistent store just for MasterPrac
+                store = WKWebsiteDataStore.dataStoreForIdentifier_(NSUUID.alloc().initWithUUIDString_(STORE_ID))
+            except Exception:
+                store = WKWebsiteDataStore.defaultDataStore()
+            cfg.setWebsiteDataStore_(store)
+            cfg.preferences().setJavaScriptCanOpenWindowsAutomatically_(True)
             self.view = WKWebView.alloc().initWithFrame_configuration_(NSMakeRect(0, 0, 10, 10), cfg)
+            self.view.setCustomUserAgent_(SAFARI_UA)
+            self.popups = PopupDelegate.alloc().init()
+            self.view.setUIDelegate_(self.popups)
+            print("  browser store persistent:", bool(store.isPersistent()), flush=True)
             self.view.setHidden_(True)
             content.addSubview_(self.view)
             self.go(SESSION.get("start_url") or h.SONGSTERR)

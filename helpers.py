@@ -48,6 +48,16 @@ def spotify_now():
     return {"running": True, "state": state, "title": title, "artist": artist, "volume": int(float(vol or 0))}
 
 
+def spotify_position():
+    """{'pos': seconds, 'state', 'title', 'artist'} - quick, for syncing the tab to the recording."""
+    out = _osa('if application "Spotify" is running then\n tell application "Spotify" to return (player position as string) & tab & '
+               '(player state as string) & tab & (name of current track) & tab & (artist of current track)\nelse\n return ""\nend if')
+    if not out:
+        return {"state": "off"}
+    pos, state, title, artist = (out.split("\t") + ["", "", "", ""])[:4]
+    return {"pos": float(pos.replace(",", ".") or 0), "state": state, "title": title, "artist": artist}
+
+
 def spotify_mute():
     """Volume 0 but keep playing (listening minutes keep counting). Remembers the old volume."""
     now = spotify_now()

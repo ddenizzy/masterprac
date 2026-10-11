@@ -13,6 +13,7 @@
       <button class="tab active" data-tab="songsterr">Songsterr</button>
       <button class="tab" data-tab="notes">Live notes</button>
       <button class="tab" data-tab="amp">Amp &amp; tone</button>
+      <button class="tab" data-tab="learn">Learn</button>
       <button class="tab" data-tab="songs">My songs</button>
       <button class="tab" data-tab="help">How it works</button>
     </nav>
@@ -38,6 +39,10 @@
 
   <!-- LIVE NOTES -->
   <section class="view hidden" id="view-notes">
+    <div class="follow">
+      <div class="seg"><button class="seg-b on" data-follow="tab">Follow the tab (exact notes)</button><button class="seg-b" data-follow="listen">Listen to the music</button></div>
+      <div class="tabinfo" id="tabinfo"></div>
+    </div>
     <div class="notes-top">
       <div class="now"><span class="now-label">NOW</span><b id="now-chord">-</b><i class="beat" id="beat"></i></div>
       <div class="keybox"><span class="now-label">KEY</span><b id="key-name">-</b><span class="sub" id="key-src"></span></div>
@@ -54,6 +59,8 @@
       <span><i class="dot root"></i>Root (home note)</span>
       <span><i class="dot chord"></i>Notes of the chord playing NOW: land on these</span>
       <span><i class="dot scale"></i>Rest of the scale: safe to pass through</span>
+      <span class="tabonly"><i class="dot play"></i>Lead guitar plays THIS now</span>
+      <span class="tabonly"><i class="dot next"></i>Coming next</span>
       <span class="sub" id="live-status">Play the song (Songsterr's player or Spotify) and the chord follows it live.</span>
     </div>
     <div class="prog" id="prog"></div>
@@ -66,6 +73,21 @@
       <div id="guide"><p class="explain">Open a song in the Songsterr tab: its tone guide appears here.</p></div>
       <h2 class="sec">Your amp right now <span class="sub">read-only</span></h2>
       <div id="amp"><p class="explain">Looking for your HeadRush on Wi-Fi...</p></div>
+    </div>
+  </section>
+
+  <!-- LEARN: how keys work, with the open song as the example, + ask Claude -->
+  <section class="view hidden" id="view-learn">
+    <div class="learn">
+      <div class="lessons" id="lessons"></div>
+      <aside class="chat">
+        <p class="label">Ask anything</p>
+        <p class="explain">About keys, scales, improvising, this song or your tone. Answers use the song that's open.</p>
+        <div class="chips" id="ask-ideas"></div>
+        <div class="msgs" id="msgs"></div>
+        <form id="ask-form"><input id="ask-q" placeholder="e.g. Why does the minor pentatonic work over this song?" autocomplete="off">
+          <button type="submit">Ask</button></form>
+      </aside>
     </div>
   </section>
 

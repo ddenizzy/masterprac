@@ -30,6 +30,13 @@ def _same_origin_only():
         return jsonify({"error": "Not allowed from another website."}), 403
 
 
+@app.post("/api/jslog")
+def jslog():
+    b = request.get_json(force=True) or {}
+    print(f"  PAGE ERROR: {str(b.get('msg'))[:200]} @ {str(b.get('at'))[-60:]}", flush=True)
+    return jsonify({"ok": True})
+
+
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")
@@ -62,6 +69,68 @@ def amp_now():
     if time.time() - _amp["at"] > 3:
         _amp["data"], _amp["at"] = ampview.snapshot(), time.time()
     return jsonify(_amp["data"])
+
+
+TEACHER = """You are a patient guitar teacher inside MasterPrac, a practice app. The student plays a Fender
+Stratocaster through a HeadRush amp, is intermediate, and is learning keys, scales and improvisation.
+Answer in plain, friendly words, short (max ~8 sentences or a few bullet points), no markdown headings.
+Use the song context (key, chords, current bar, section) to make examples concrete: name actual frets and strings
+when helpful (e.g. "the root B is on the 7th fret of the low E string"). If they ask something unrelated to music, answer briefly."""
+
+
+@app.post("/api/ask")
+def ask():
+    """The Learn tab's question box: Claude answers about keys, scales, improv and the song that's open."""
+    import json, subprocess, tempfile
+    import guide
+    b = request.get_json(force=True) or {}
+    q = (b.get("question") or "").strip()[:800]
+    if not q:
+        return jsonify({"error": "Type a question first."}), 400
+    cli = guide._claude()
+    if not cli:
+        return jsonify({"error": "Claude Code isn't installed."}), 500
+    ctx = b.get("context") or {}
+    song = SESSION.get("song")
+    g = h.load("guides", {}).get(str(song["id"])) if song else None
+    context = {"song": song and {"title": song["title"], "artist": song["artist"]}, "now": ctx,
+               "guide": g and {k: g[k] for k in ("key", "tempo_bpm", "tuning", "chords", "improv", "strat") if k in g}}
+    history = "\n".join(f"{'Student' if m.get('role') == 'user' else 'You'}: {m.get('text', '')[:600]}" for m in (b.get("history") or [])[-6:])
+    prompt = f"Context: {json.dumps(context)}\n" + (f"Earlier:\n{history}\n" if history else "") + f"Student: {q}"
+    cmd = [cli, "-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
+           "--setting-sources", "", "--system-prompt", TEACHER]
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=180, cwd=tmp)
+        out = json.loads(r.stdout)
+        if out.get("is_error"):
+            raise RuntimeError(out.get("result"))
+        return jsonify({"answer": out.get("result", "").strip()})
+    except Exception as e:
+        return jsonify({"error": f"Claude couldn't answer: {str(e)[:150]}"}), 502
+
+
+@app.get("/api/tab")
+def tab():
+    """The open song's lead guitar notes + bar timing + chords + key (from Songsterr), for the fretboard."""
+    import tabs
+    song = SESSION.get("song")
+    if not song:
+        return jsonify({"error": "Open a song in the Songsterr tab first."}), 404
+    lead = request.args.get("lead", type=int)
+    try:
+        return jsonify(tabs.load(song["id"], lead))
+    except Exception as e:
+        return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
+
+
+@app.get("/api/pos")
+def pos():
+    """Where Spotify is in the song right now (it keeps playing muted), for following the tab."""
+    import time
+    p = h.spotify_position()
+    p["at"] = time.time()
+    return jsonify(p)
 
 
 @app.get("/api/live")

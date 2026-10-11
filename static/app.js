@@ -1,6 +1,12 @@
+// report page errors to the app log (so problems never stay invisible)
+window.addEventListener("error", (e) => fetch("/api/jslog", { method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ msg: String(e.message), at: `${e.filename}:${e.lineno}` }) }).catch(() => {}));
+window.addEventListener("unhandledrejection", (e) => fetch("/api/jslog", { method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ msg: String(e.reason), at: "promise" }) }).catch(() => {}));
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const api = () => (window.pywebview && window.pywebview.api) || null;
+// the app's bridge; usable only once its functions are attached (a moment after the page loads)
+const api = () => { const a = window.pywebview && window.pywebview.api; return a && typeof a.browser_place === "function" ? a : null; };
 let tab = "songsterr";
 
 function toast(msg) {
@@ -24,13 +30,15 @@ function setTab(name) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.id !== `view-${name}`));
   placeBrowser();
-  if (name === "notes") drawBoard();
+  if (name === "notes") { drawBoard(); if (live.mode === "tab") loadTab(); }
   if (name === "amp") { guideSeen = guideFor; $("#guide-ready").classList.add("hidden"); loadGuide(); loadAmp(); }
   if (name === "songs") loadSongs();
+  if (name === "learn") { if (!tabState.data) loadTab().then(renderLessons); renderLessons(); }
 }
 
 function render(s) {
   $("#song-chip").textContent = s.song ? `${s.song.title} · ${s.song.artist}` : "No song yet";
+  if (s.song && typeof tabState !== "undefined" && tabState.songId && tabState.songId !== s.song.id && tab === "notes" && live.mode === "tab") loadTab();
   const gt = s.song && s.song.tracks.find((t) => /guitar/i.test(t.instrument) && t.tuning);
   if (gt && JSON.stringify(gt.tuning) !== JSON.stringify(live.tuning)) { live.tuning = gt.tuning; if (tab === "notes") drawBoard(); }
   const bt = s.bt || {};
@@ -122,7 +130,7 @@ function detectChord(c, key) {
 }
 
 /* ======================= the fretboard ======================= */
-const FRETS = 15;
+let FRETS = 15;
 function drawBoard() {
   const svg = $("#board"), W = svg.clientWidth || 1000, H = 260;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -132,7 +140,7 @@ function drawBoard() {
   const fx = (f) => left + scaleLen * (1 - Math.pow(2, -f / 12));
   const strings = live.tuning.length, sy = (s) => top + (s * (H - top - bottom)) / (strings - 1);
   const key = live.key, scale = SCALES[$("#scale").value];
-  const chordTones = live.chord ? live.chord.tones : [];
+  const chordTones = live.mode === "tab" ? (live.barChordTones || []) : live.chord ? live.chord.tones : [];
   const mode = $("#labels").value, area = $("#area").value;
   // box positions (pentatonic boxes) start on the scale notes of the low string, from the root
   const lowOpen = live.tuning[strings - 1] % 12;
@@ -159,6 +167,16 @@ function drawBoard() {
       g += `<g class="note ${cls} ${isChord ? "hot" : ""}"><circle cx="${x}" cy="${sy(s)}" r="${isChord ? 13 : 11}"/><text x="${x}" y="${sy(s) + 4}">${label}</text></g>`;
     }
   });
+  // follow-the-tab overlay: what the lead guitar plays now (filled) and next (outlined), on the exact string/fret
+  const spot = (s, f, cls) => {
+    if (s >= strings) return "";
+    const x = f === 0 ? left - 16 : (fx(f - 1) + fx(f)) / 2;
+    return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? 16 : 14}"/><text x="${x}" y="${sy(s) + 4}">${f}</text></g>`;
+  };
+  if (live.mode === "tab") {
+    for (const [s, f] of live.nextNotes || []) g += spot(s, f, "next");
+    for (const [s, f] of live.nowNotes || []) g += spot(s, f, "play");
+  }
   svg.innerHTML = g;
 }
 ["scale", "labels", "area"].forEach((id) => $("#" + id).addEventListener("change", () => { if (id === "scale") live.userScale = true; drawBoard(); }));
@@ -178,7 +196,7 @@ const POLL = 120;
 let smooth = Array(12).fill(0), challenger = null, challengerSince = 0, keyGuess = null, keyGuessSince = 0;
 const barSeconds = () => Math.min(3, Math.max(1.2, 4 * 60 / (live.bpm || 100)));
 async function pollLive() {
-  if (tab !== "notes") return;
+  if (tab !== "notes" || live.mode === "tab") return;
   let d;
   try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
   if (!d.live || d.rms < 0.004) {
@@ -327,3 +345,144 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.unfav) { await fetch("/api/songs/fav", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: Number(b.dataset.unfav) }) }); loadSongs(); }
   if (b.dataset.url && api()) { api().browser_go(b.dataset.url); setTab("songsterr"); }
 });
+
+
+/* ======================= FOLLOW THE TAB ======================= */
+// The lead guitar's exact notes from the song's tab, synced to Spotify's play position (it keeps
+// running while muted) using Songsterr's bar timings for the real recording.
+live.mode = "tab";
+const tabState = { data: null, songId: null, pos: null, offset: 0, evIndex: -1, lastDraw: "" };
+const norm = (s) => String(s || "").toLowerCase().replace(/\(.*?\)|-.*$/g, "").replace(/[^a-z0-9]/g, "");
+const chordTonesOf = (name) => {
+  const m = /^([A-G]#?)(m?)$/.exec(name || "");
+  if (!m) return [];
+  const r = NOTES.indexOf(m[1]);
+  return (m[2] ? [0, 3, 7] : [0, 4, 7]).map((i) => (r + i) % 12);
+};
+async function loadTab() {
+  const s = await (await fetch("/api/session")).json();
+  if (!s.song) { tabInfo("Open a song in the Songsterr tab first."); return; }
+  if (tabState.songId === s.song.id && tabState.data) return;
+  tabInfo(`Loading the tab of "${esc(s.song.title)}"...`);
+  const r = await fetch("/api/tab");
+  const d = await r.json();
+  if (!r.ok) { tabInfo(esc(d.error)); return; }
+  tabState.data = d; tabState.songId = s.song.id; tabState.song = s.song;
+  tabState.offset = Number(localStorage.getItem("mp-offset-" + s.song.id) || 0);
+  live.tuning = d.tuning;
+  FRETS = Math.min(22, Math.max(15, ...d.events.flatMap((e) => e[2].map((n) => n[1] + 1))));
+  live.key = { root: d.key.root, minor: d.key.minor }; live.keySrc = "from the tab"; live.userScale = false; showKey();
+  $("#prog").innerHTML = "";
+  drawBoard();
+}
+function tabInfo(html) { $("#tabinfo").innerHTML = html; }
+async function pollPos() {
+  if (tab !== "notes" || live.mode !== "tab") return;
+  try { const p = await (await fetch("/api/pos")).json(); p.local = performance.now(); tabState.pos = p; } catch (e) { /* retry */ }
+}
+setInterval(pollPos, 400);
+// binary search: the last item whose time is <= t
+const lastAt = (arr, t, key) => { let lo = 0, hi = arr.length - 1, ans = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (key(arr[m]) <= t) { ans = m; lo = m + 1; } else hi = m - 1; } return ans; };
+function tabTick() {
+  requestAnimationFrame(tabTick);
+  if (tab !== "notes" || live.mode !== "tab") return;
+  const d = tabState.data, p = tabState.pos;
+  if (!d) return;
+  if (!p || p.state === "off") { tabInfo("Spotify isn't open. Play the song on Spotify (muted is fine) and the fretboard follows the tab."); return; }
+  const sameSong = norm(p.title).startsWith(norm(tabState.song.title).slice(0, 8)) || norm(tabState.song.title).startsWith(norm(p.title).slice(0, 8));
+  const t = p.pos + (p.state === "playing" ? (performance.now() - p.local) / 1000 : 0) + tabState.offset;
+  const bi = lastAt(d.bars, t, (b) => b.t), bar = d.bars[Math.max(0, bi)];
+  const section = d.bars.slice(0, bi + 1).reverse().find((b) => b.section)?.section || "";
+  const next = d.bars.slice(bi + 1).find((b) => b.chord && b.chord !== bar.chord);
+  const ei = lastAt(d.events, t, (e) => e[0]);
+  const cur = ei >= 0 && t < d.events[ei][0] + d.events[ei][1] ? d.events[ei] : null;
+  const upcoming = d.events.slice(ei + 1).filter((e) => e[0] - t < 1.2).slice(0, 4);
+  live.nowNotes = cur ? cur[2] : [];
+  live.nextNotes = upcoming.flatMap((e) => e[2]);
+  live.barChordTones = chordTonesOf(bar.chord);
+  $("#now-chord").textContent = bar.chord || "-";
+  const key = `${ei}|${bi}|${upcoming.length}`;
+  if (key !== tabState.lastDraw) { tabState.lastDraw = key; drawBoard(); }
+  tabInfo(`${sameSong ? "" : `<b class="warn">Spotify is playing "${esc(p.title)}", not this song: play this song on Spotify to sync.</b><br>`}
+    <b>${esc(section || "-")}</b> · bar ${bi + 1}/${d.bars.length} · chord <b>${esc(bar.chord || "-")}</b>${next ? ` &#8594; next <b>${esc(next.chord)}</b>` : ""}
+    · ${p.state === "playing" ? "playing" : "paused"} ${fmtT(t)}
+    <span class="nudge">timing <button class="ghost icon" data-nudge="-0.25" title="Notes come too late">&#8722;</button>${tabState.offset >= 0 ? "+" : ""}${tabState.offset.toFixed(2)} s<button class="ghost icon" data-nudge="0.25" title="Notes come too early">+</button></span>
+    <span class="sub">Lead: ${esc(d.lead_name.split("|").slice(-2).join("·"))}${d.synced ? "" : " (not synced to the recording: timing from the tempo)"}</span>`);
+}
+const fmtT = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
+requestAnimationFrame(tabTick);
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.follow) {
+    live.mode = b.dataset.follow;
+    document.querySelectorAll("[data-follow]").forEach((x) => x.classList.toggle("on", x === b));
+    document.body.classList.toggle("tabmode", live.mode === "tab");
+    if (live.mode === "tab") loadTab(); else { tabInfo("Listening to the music: chords follow what's heard."); live.nowNotes = live.nextNotes = []; drawBoard(); }
+  }
+  if (b.dataset.nudge && tabState.songId) {
+    tabState.offset = Math.round((tabState.offset + Number(b.dataset.nudge)) * 100) / 100;
+    localStorage.setItem("mp-offset-" + tabState.songId, tabState.offset);
+  }
+});
+document.body.classList.add("tabmode");
+
+
+/* ======================= LEARN: how keys work + ask Claude ======================= */
+function songKey() {
+  const k = live.key || { root: 9, minor: true };
+  return { ...k, name: `${NOTES[k.root]} ${k.minor ? "minor" : "major"}`, rel: k.minor ? `${NOTES[(k.root + 3) % 12]} major` : `${NOTES[(k.root + 9) % 12]} minor` };
+}
+const scaleNotes = (root, ivs) => ivs.map((i) => NOTES[(root + i) % 12]).join(" ");
+function fretOf(note, open) { return ((NOTES.indexOf(note) - open % 12) + 12) % 12; }
+function renderLessons() {
+  const k = songKey(), song = (tabState.song && tabState.song.title) || "this song";
+  const chords = tabState.data ? [...new Set(tabState.data.bars.map((b) => b.chord).filter(Boolean))].slice(0, 7) : [];
+  const pent = k.minor ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9], full = k.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const rootLowE = fretOf(NOTES[k.root], 40), rootA = fretOf(NOTES[k.root], 45);
+  const L = [
+    ["1 · The 12 notes", `Music uses only <b>12 notes</b>: C, C#, D, D#, E, F, F#, G, G#, A, A#, B, then it repeats one octave higher.
+      On the guitar, <b>each fret = one step</b> (a half step). Fret 12 is the same note as the open string, one octave up (that's why it has two dots).`],
+    ["2 · What a key is", `A <b>key</b> is a "home" note plus a family of 7 notes that sound right together. ${esc(song)} is in <b>${k.name}</b>:
+      its home note is <b>${NOTES[k.root]}</b> and its family is <b>${scaleNotes(k.root, full)}</b>. Melodies and solos mostly use these notes,
+      and the song feels "finished" when it lands back on ${NOTES[k.root]}.`],
+    ["3 · Major vs minor", `<b>Major</b> sounds bright/happy, <b>minor</b> sounds darker/sad. The difference is mostly one note, the <b>3rd</b>:
+      4 frets above the root in major, <b>3 frets (the "b3")</b> in minor. ${k.name} shares all its notes with <b>${k.rel}</b> (its "relative" key):
+      same notes, different home.`],
+    ["4 · Scales vs chords", `A <b>scale</b> is the key's notes in a row. A <b>chord</b> is 3+ notes played together, usually the 1st, 3rd and 5th
+      of a scale (the "chord tones"). This song's chords: <b>${chords.length ? chords.join(" · ") : "open the tab in Live notes to see them"}</b>.
+      <b>Improv secret:</b> landing on a <b>chord tone of the chord playing right now</b> always sounds good. That's what the green notes in Live notes show.`],
+    ["5 · The pentatonic: your first improv tool", `The <b>${k.minor ? "minor" : "major"} pentatonic</b> keeps the 5 safest notes of the key:
+      <b>${scaleNotes(k.root, pent)}</b>. It has no "wrong" notes over this song. Start in <b>box 1</b>: the root ${NOTES[k.root]} is on
+      <b>fret ${rootLowE || 12} of the low E string</b> and fret ${rootA || 12} of the A string. In Live notes choose <i>Area → Box 1</i>, then try
+      boxes 2–5 to connect the whole neck.`],
+    ["6 · Intervals: shapes that work in any key", `An <b>interval</b> is the distance from the root: <b>R</b> (root), <b>b3</b>, <b>3</b>, <b>5</b>, <b>b7</b>...
+      Turn on <i>Show → Intervals</i> in Live notes: the same shape spells R-b3-4-5-b7 in every minor key, just moved up or down the neck.
+      Learn the shape once, play it in all 12 keys.`],
+  ];
+  $("#lessons").innerHTML = `<h2>How keys work <span class="sub">with ${esc(song)} as the example</span></h2>` +
+    L.map(([t, body]) => `<details class="lesson"><summary>${t}</summary><p>${body}</p></details>`).join("") +
+    `<div class="row"><button class="ghost" data-go="notes">Try it on the fretboard &#8594;</button></div>`;
+  const ideas = [`Which notes should I aim for over ${chords[0] || "the first chord"}?`, `How do I find the key of a song by ear?`,
+    `Give me a 3-note lick in ${k.name} with frets`, `What's the difference between ${NOTES[k.root]} minor and ${NOTES[k.root]} dorian?`];
+  $("#ask-ideas").innerHTML = ideas.map((q) => `<button class="ghost idea" data-ask="${esc(q)}">${esc(q)}</button>`).join("");
+}
+const chat = [];
+async function ask(q) {
+  chat.push({ role: "user", text: q });
+  drawChat(true);
+  const now = { key: songKey().name, chord_now: $("#now-chord").textContent, section_info: $("#tabinfo").textContent.slice(0, 160) };
+  try {
+    const r = await (await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, history: chat.slice(0, -1), context: now }) })).json();
+    chat.push({ role: "claude", text: r.answer || r.error });
+  } catch (e) { chat.push({ role: "claude", text: "Couldn't reach Claude. Try again." }); }
+  drawChat(false);
+}
+function drawChat(waiting) {
+  $("#msgs").innerHTML = chat.map((m) => `<div class="msg ${m.role}">${esc(m.text).replace(/\n/g, "<br>")}</div>`).join("")
+    + (waiting ? `<div class="msg claude wait">thinking...</div>` : "");
+  $("#msgs").scrollTop = $("#msgs").scrollHeight;
+}
+$("#ask-form").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#ask-q").value.trim(); if (q) { $("#ask-q").value = ""; ask(q); } });
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-ask]"); if (b) ask(b.dataset.ask); });
