@@ -8,62 +8,95 @@
 </head>
 <body>
   <header class="top">
-    <div>
-      <h1>MasterPrac</h1>
-      <p class="tag">Learn keys and improv on the songs you love, with your HeadRush.</p>
+    <div class="brand"><b>MasterPrac</b><span id="song-chip" class="song-chip">No song yet</span></div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="songsterr">Songsterr</button>
+      <button class="tab" data-tab="notes">Live notes</button>
+      <button class="tab" data-tab="amp">Amp &amp; tone</button>
+      <button class="tab" data-tab="songs">My songs</button>
+      <button class="tab" data-tab="help">How it works</button>
+    </nav>
+    <div class="status">
+      <span class="pill" id="pill-sound" title="Where the Mac's sound plays">Sound</span>
+      <span class="pill" id="pill-spotify" title="Spotify while you practise">Spotify</span>
     </div>
-    <button class="ghost" id="help-btn">How this works</button>
   </header>
 
-  <section class="help hidden" id="help">
-    <h2>How MasterPrac works</h2>
-    <ol>
-      <li><b>Left window = Songsterr.</b> Open any song there; MasterPrac notices which song it is.</li>
-      <li><b>This panel</b> shows the song, where your sound goes, your amp and (soon) the fretboard with the notes you can play.</li>
-      <li><b>When it opened,</b> MasterPrac found the song Spotify was playing, muted Spotify (or paused it on battery),
-        and moved the Mac's sound to your HeadRush over Bluetooth. The list at the bottom says exactly what it did.</li>
-      <li><b>When you close it,</b> the sound goes back to your Kali speakers and Spotify's volume comes back.</li>
-      <li><b>Your saved rigs are never changed.</b> Tone ideas go into one practice rig until you choose to save them.</li>
-    </ol>
+  <!-- SONGSTERR: a real browser sits over #browser-area (placed by the app) -->
+  <section class="view" id="view-songsterr">
+    <div class="browser-bar">
+      <button class="icon" data-nav="back" title="Back">&#8592;</button>
+      <button class="icon" data-nav="forward" title="Forward">&#8594;</button>
+      <button class="icon" data-nav="reload" title="Reload">&#8635;</button>
+      <form id="search"><input id="search-q" placeholder="Search a song on Songsterr..." autocomplete="off"></form>
+      <button class="ghost" id="spotify-song" title="Open the song Spotify is playing">Spotify's song</button>
+      <button class="ghost star" id="fav-btn" title="Save this song in My songs">&#9734; Favourite</button>
+      <button class="ready hidden" id="guide-ready" data-go="amp">Tone guide ready &#8594;</button>
+    </div>
+    <div id="browser-area" class="browser-area"><p>Loading Songsterr...</p></div>
   </section>
 
-  <main class="grid">
-    <section class="card wide">
-      <p class="label">Song</p>
-      <div id="song"><p class="muted">Open a song in the Songsterr window on the left.</p></div>
-    </section>
-
-    <section class="card">
-      <p class="label">Where your sound goes</p>
-      <p class="explain">The Mac's sound (Songsterr, backing tracks) can play through your amp, mixed with your guitar.</p>
-      <div id="route"></div>
-      <div class="row">
-        <button data-sound="amp">Play through amp</button>
-        <button class="ghost" data-sound="speakers">Play through Kali speakers</button>
+  <!-- LIVE NOTES -->
+  <section class="view hidden" id="view-notes">
+    <div class="notes-top">
+      <div class="now"><span class="now-label">NOW</span><b id="now-chord">-</b><i class="beat" id="beat"></i></div>
+      <div class="keybox"><span class="now-label">KEY</span><b id="key-name">-</b><span class="sub" id="key-src"></span></div>
+      <div class="controls">
+        <label>Scale <select id="scale"></select></label>
+        <label>Show <select id="labels"><option value="names">Note names</option><option value="intervals">Intervals (R, b3, 5)</option></select></label>
+        <label>Area <select id="area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
       </div>
-    </section>
+    </div>
+    <div class="board-wrap"><svg id="board" class="board"></svg></div>
+    <div class="legend">
+      <span><i class="dot root"></i>Root (home note)</span>
+      <span><i class="dot chord"></i>Notes of the chord playing NOW: land on these</span>
+      <span><i class="dot scale"></i>Rest of the scale: safe to pass through</span>
+      <span class="sub" id="live-status">Play the song (Songsterr's player or Spotify) and the chord follows it live.</span>
+    </div>
+    <div class="prog" id="prog"></div>
+  </section>
 
-    <section class="card">
-      <p class="label">Spotify</p>
-      <p class="explain">Muted while you practise when plugged in (still playing, so your minutes count); paused on battery.</p>
-      <div id="spotify"></div>
-    </section>
+  <!-- AMP & TONE -->
+  <section class="view hidden" id="view-amp">
+    <div class="panel wide">
+      <div id="guide"><p class="explain">Open a song in the Songsterr tab: its tone guide appears here.</p></div>
+      <h2 class="sec">Your amp right now <span class="sub">read-only</span></h2>
+      <div id="amp"><p class="explain">Looking for your HeadRush on Wi-Fi...</p></div>
+    </div>
+  </section>
 
-    <section class="card soon">
-      <p class="label">Amp · coming next</p>
-      <p class="explain">Quick view of your rig and scenes, a tone designer for the open song, and a safe sound editor.</p>
-    </section>
+  <!-- MY SONGS -->
+  <section class="view hidden" id="view-songs">
+    <div class="panel">
+      <h2>My songs</h2>
+      <p class="explain">Click a song to open it in Songsterr. Press &#9734; Favourite in the Songsterr tab to save one here;
+        "Most practised" fills itself from the time each song is open.</p>
+      <h3>Favourites</h3><ul class="songs" id="favs"></ul>
+      <h3>Most practised</h3><ul class="songs" id="practised"></ul>
+    </div>
+  </section>
 
-    <section class="card soon">
-      <p class="label">Fretboard · coming next</p>
-      <p class="explain">The song's key on a big guitar neck, with the notes that fit the chord playing right now lit up.</p>
-    </section>
-
-    <section class="card wide">
-      <p class="label">What MasterPrac did</p>
+  <!-- HOW IT WORKS -->
+  <section class="view hidden" id="view-help">
+    <div class="panel">
+      <h2>How MasterPrac works</h2>
+      <ol class="points">
+        <li><b>Songsterr tab:</b> a browser built into the app. Open any song; MasterPrac recognises it and the other tabs follow it.</li>
+        <li><b>When it opens,</b> it finds the song Spotify is playing, mutes Spotify (still playing, so your minutes count; paused on battery)
+          and moves the Mac's sound to your HeadRush over Bluetooth.</li>
+        <li><b>When you close it,</b> the sound goes back to your Kali speakers and Spotify's volume comes back.</li>
+        <li><b>Your saved rigs are never changed.</b></li>
+      </ol>
+      <div class="row">
+        <button data-sound="amp">Play the Mac's sound through the amp</button>
+        <button class="ghost" data-sound="speakers">Play through the Kali speakers</button>
+      </div>
+      <h3>What MasterPrac did</h3>
       <ul class="log" id="log"></ul>
-    </section>
-  </main>
+    </div>
+  </section>
+
   <div class="toast hidden" id="toast"></div>
   <script src="/static/app.js"></script>
 </body>
