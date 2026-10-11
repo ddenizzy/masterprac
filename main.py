@@ -163,7 +163,21 @@ def watch_browser(browser):
     AppHelper.callLater(1.5, watch_browser, browser)
 
 
+def _port_free():
+    import socket
+    with socket.socket() as so:
+        return so.connect_ex(("127.0.0.1", PORT)) != 0
+
+
 def main():
+    import time
+    for _ in range(20):  # a previous MasterPrac may still be closing: wait a moment instead of colliding
+        if _port_free():
+            break
+        time.sleep(0.5)
+    else:
+        print("  MasterPrac is already open (or something else uses port 5070).", flush=True)
+        return
     threading.Thread(target=lambda: app.run(host="127.0.0.1", port=PORT, threaded=True), daemon=True).start()
     scr = NSScreen.mainScreen().visibleFrame()
     W, H = int(scr.size.width), int(scr.size.height)
