@@ -31,6 +31,7 @@ function setTab(name) {
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.id !== `view-${name}`));
   placeBrowser();
   if (name === "notes") { drawBoard(); if (live.mode === "tab") loadTab(); }
+  if (name === "now") { pollNow(); drawNow(); }
   if (name === "amp") { guideSeen = guideFor; $("#guide-ready").classList.add("hidden"); loadGuide(); loadAmp(); }
   if (name === "songs") loadSongs();
   if (name === "learn") { if (!tabState.data) loadTab().then(renderLessons); renderLessons(); }
@@ -151,33 +152,31 @@ function detectChord(c, key) {
 
 /* ======================= the fretboard ======================= */
 let FRETS = 15;
-function drawBoard() {
-  const svg = $("#board"), W = svg.clientWidth || 1000, H = 260;
+// One fretboard drawing used by every page. o = {tuning, key, scale (intervals), chordTones, labels, area, frets, now, next}
+function fretboard(svg, o) {
+  const W = svg.clientWidth || 1000, H = 270, FR = o.frets || 15;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const left = 46, right = 14, top = 22, bottom = 30;
+  const left = 46, right = 18, top = 38, bottom = 30;
   // real guitar spacing: frets get closer up the neck
-  const scaleLen = (W - left - right) / (1 - Math.pow(2, -FRETS / 12));
+  const scaleLen = (W - left - right) / (1 - Math.pow(2, -FR / 12));
   const fx = (f) => left + scaleLen * (1 - Math.pow(2, -f / 12));
-  const strings = live.tuning.length, sy = (s) => top + (s * (H - top - bottom)) / (strings - 1);
-  const key = live.key, scale = SCALES[$("#scale").value];
-  const chordTones = live.mode === "tab" ? (live.barChordTones || []) : live.chord ? live.chord.tones : [];
-  const mode = $("#labels").value, area = $("#area").value;
+  const tuning = o.tuning, strings = tuning.length, sy = (s) => top + (s * (H - top - bottom)) / (strings - 1);
+  const key = o.key, scale = o.scale, chordTones = o.chordTones || [], mode = o.labels, area = o.area || "all";
   // box positions (pentatonic boxes) start on the scale notes of the low string, from the root
-  const lowOpen = live.tuning[strings - 1] % 12;
+  const lowOpen = tuning[strings - 1] % 12;
   const rootFret = key ? ((key.root - lowOpen) % 12 + 12) % 12 : 0;
-  const boxStarts = key ? scale.map((iv) => (rootFret + iv) % 12).sort((a, b) => a - b) : [];
   const boxFrom = area === "all" || !key ? 0 : (rootFret + [0, 3, 5, 7, 10][Number(area) - 1]) % 12;
   const inArea = (f) => area === "all" || !key || (f >= boxFrom - 1 && f <= boxFrom + 4) || (f >= boxFrom + 11 && f <= boxFrom + 16);
   let g = "";
-  for (let f = 1; f <= FRETS; f++) g += `<line class="fret ${f === 12 ? "twelve" : ""}" x1="${fx(f)}" y1="${top}" x2="${fx(f)}" y2="${H - bottom}"/>`;
+  for (let f = 1; f <= FR; f++) g += `<line class="fret ${f === 12 ? "twelve" : ""}" x1="${fx(f)}" y1="${top}" x2="${fx(f)}" y2="${H - bottom}"/>`;
   g += `<rect class="nut" x="${left - 5}" y="${top - 2}" width="6" height="${H - top - bottom + 4}"/>`;
-  for (const f of [3, 5, 7, 9, 15]) g += `<circle class="inlay" cx="${(fx(f - 1) + fx(f)) / 2}" cy="${H - bottom + 16}" r="4"/>`;
+  for (const f of [3, 5, 7, 9, 15, 17, 19, 21].filter((f) => f <= FR)) g += `<circle class="inlay" cx="${(fx(f - 1) + fx(f)) / 2}" cy="${H - bottom + 16}" r="4"/>`;
   g += `<circle class="inlay" cx="${(fx(11) + fx(12)) / 2 - 7}" cy="${H - bottom + 16}" r="4"/><circle class="inlay" cx="${(fx(11) + fx(12)) / 2 + 7}" cy="${H - bottom + 16}" r="4"/>`;
-  for (let f = 1; f <= FRETS; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 8}">${f}</text>`;
-  live.tuning.forEach((open, s) => {
+  for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 20}">${f}</text>`;
+  tuning.forEach((open, s) => {
     g += `<line class="string" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1 + s * 0.35}"/>`;
     g += `<text class="sname" x="${left - 26}" y="${sy(s) + 4}">${NOTES[open % 12]}</text>`;
-    for (let f = 0; f <= FRETS; f++) {
+    for (let f = 0; f <= FR; f++) {
       const pc = (open + f) % 12;
       const isChord = chordTones.includes(pc), iv = key ? (pc - key.root + 12) % 12 : null;
       const inScale = key && scale.includes(iv);
@@ -193,11 +192,15 @@ function drawBoard() {
     const x = f === 0 ? left - 16 : (fx(f - 1) + fx(f)) / 2;
     return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? 16 : 14}"/><text x="${x}" y="${sy(s) + 4}">${f}</text></g>`;
   };
-  if (live.mode === "tab") {
-    for (const [s, f] of live.nextNotes || []) g += spot(s, f, "next");
-    for (const [s, f] of live.nowNotes || []) g += spot(s, f, "play");
-  }
+  for (const [s, f] of o.next || []) g += spot(s, f, "next");
+  for (const [s, f] of o.now || []) g += spot(s, f, "play");
   svg.innerHTML = g;
+}
+function drawBoard() {
+  const tabMode = live.mode === "tab";
+  fretboard($("#board"), { tuning: live.tuning, key: live.key, scale: SCALES[$("#scale").value], labels: $("#labels").value,
+    area: $("#area").value, frets: FRETS, chordTones: tabMode ? (live.barChordTones || []) : live.chord ? live.chord.tones : [],
+    now: tabMode ? live.nowNotes : [], next: tabMode ? live.nextNotes : [] });
 }
 ["scale", "labels", "area"].forEach((id) => $("#" + id).addEventListener("change", () => { if (id === "scale") live.userScale = true; explainMenus(); drawBoard(); }));
 explainMenus();
@@ -406,7 +409,6 @@ setInterval(pollPos, 400);
 // binary search: the last item whose time is <= t
 const lastAt = (arr, t, key) => { let lo = 0, hi = arr.length - 1, ans = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (key(arr[m]) <= t) { ans = m; lo = m + 1; } else hi = m - 1; } return ans; };
 function tabTick() {
-  requestAnimationFrame(tabTick);
   if (tab !== "notes" || live.mode !== "tab") return;
   const d = tabState.data, p = tabState.pos;
   if (!d) return;
@@ -432,7 +434,7 @@ function tabTick() {
     <span class="sub">Lead: ${esc(d.lead_name.split("|").slice(-2).join("·"))}${d.synced ? "" : " (not synced to the recording: timing from the tempo)"}</span>`);
 }
 const fmtT = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
-requestAnimationFrame(tabTick);
+setInterval(tabTick, 100);  // a timer, not animation frames: keeps going when the window is in the background
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -508,3 +510,209 @@ function drawChat(waiting) {
 }
 $("#ask-form").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#ask-q").value.trim(); if (q) { $("#ask-q").value = ""; ask(q); } });
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-ask]"); if (b) ask(b.dataset.ask); });
+
+
+/* ======================= NOW PLAYING (any app on the Mac) ======================= */
+// What plays on the Mac (macOS "Now Playing": Spotify, YouTube in a browser, Music...) -> its Songsterr tab ->
+// the chord of the bar playing now (bar times from Songsterr, position from the player). No tab, or "By ear":
+// the chords are worked out from the sound (Custamo's listener), slowly and steadily.
+const np = { info: null, local: 0, tab: null, tabId: null, src: "tab", offset: 0, key: null, chord: "", lastDraw: "",
+  ear: { smooth: Array(12).fill(0), acc: Array(12).fill(0), chord: null, cand: null, since: 0, keySince: 0, keyCand: null } };
+const NP_SCALES = { pent: (m) => m ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9], full: (m) => m ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11],
+  blues: (m) => m ? [0, 3, 5, 6, 7, 10] : [0, 2, 3, 4, 7, 9], chord: () => [] };
+const chordInfo = (name) => {  // "F#m" -> {root, minor, tones}
+  const m = /^([A-G]#?)(m?)/.exec(name || "");
+  if (!m) return null;
+  const r = NOTES.indexOf(m[1]);
+  return { root: r, minor: !!m[2], tones: (m[2] ? [0, 3, 7] : [0, 4, 7]).map((i) => (r + i) % 12) };
+};
+const npUsingTab = () => np.src === "tab" && np.tab && !np.tab.error;
+
+async function pollNow() {
+  if (tab !== "now") return;
+  let p;
+  try { p = await (await fetch("/api/now")).json(); } catch (e) { return; }
+  const changed = !np.info || np.info.title !== p.title || np.info.artist !== p.artist;
+  np.info = p; np.local = Date.now() / 1000;
+  if (changed) {
+    $("#np-app").textContent = p.title ? `${p.playing ? "PLAYING" : "PAUSED"} IN ${(p.app || "AN APP").toUpperCase()}` : "NOTHING PLAYING";
+    $("#np-title").textContent = p.title || "Play a song in any app";
+    $("#np-artist").textContent = p.title ? (p.artist || "Unknown artist") : "Spotify, YouTube in Safari or Chrome, Apple Music... MasterPrac follows it.";
+    np.ear = { ...np.ear, chord: null, cand: null, acc: Array(12).fill(0), keyCand: null };
+    np.key = null; np.chord = "";
+    const id = p.match && p.match.id;
+    if (id !== np.tabId) {
+      np.tabId = id; np.tab = null; $("#np-map").innerHTML = "";
+      np.offset = Number(localStorage.getItem("np-offset-" + id) || 0);
+      $("#np-off").textContent = `${np.offset >= 0 ? "+" : ""}${np.offset.toFixed(2)} s`;
+      if (id) {
+        $("#np-src").textContent = "Loading the song's chords from Songsterr...";
+        try { np.tab = await (await fetch(`/api/now/tab/${id}`)).json(); } catch (e) { np.tab = { error: "Couldn't load it" }; }
+        if (np.info && np.info.match && np.info.match.id === id) buildMap();
+      }
+    }
+    const btn = $("#np-open");
+    btn.disabled = !p.title;
+    btn.textContent = p.match ? "Open Songsterr version" : "Search it on Songsterr";
+  } else {
+    $("#np-app").textContent = p.title ? `${p.playing ? "PLAYING" : "PAUSED"} IN ${(p.app || "AN APP").toUpperCase()}` : "NOTHING PLAYING";
+  }
+  npSourceNote();
+}
+setInterval(pollNow, 1000);
+
+function npSourceNote() {
+  const p = np.info || {};
+  $("#np-nudge").classList.toggle("hidden", !npUsingTab());
+  if (np.lastDraw === "end" && npUsingTab()) return;  // keep the "past the tab's end" note
+  let t = "";
+  if (!p.title) t = "";
+  else if (np.src === "ear") t = "Listening to the music to work out the chords (needs Custamo open).";
+  else if (!p.match) t = "Songsterr doesn't have this exact song, so the chords are worked out by ear.";
+  else if (np.tab && np.tab.error) t = esc(np.tab.error) + " Using the ear instead.";
+  else if (np.tab) t = `Real chords from Songsterr's tab${np.tab.synced ? ", in time with the recording" : " (timing guessed from the tempo)"}.`;
+  $("#np-src").innerHTML = t;
+  $("#np-nudge").classList.toggle("hidden", !npUsingTab());
+}
+
+const npTime = () => {
+  const p = np.info;
+  if (!p || !p.title) return 0;
+  return p.pos + (p.playing ? Date.now() / 1000 - p.at : 0) + np.offset;
+};
+
+// the song's chord map: one row per part (Intro, Verse...), chords in order, repeats merged
+function buildMap() {
+  const d = np.tab;
+  if (!d || d.error || !d.bars) return;
+  const secs = [];
+  d.bars.forEach((b, i) => {
+    if (b.section || !secs.length) secs.push({ name: b.section || "Start", from: i, chords: [] });
+    const s = secs[secs.length - 1], last = s.chords[s.chords.length - 1];
+    if (b.chord && (!last || last.name !== b.chord)) s.chords.push({ name: b.chord, from: i, to: i });
+    else if (last) last.to = i;
+  });
+  $("#np-map").innerHTML = `<span class="now-label">THE WHOLE SONG'S CHORDS</span>` + secs.map((s, si) =>
+    `<div class="sec" data-sec="${si}" data-from="${s.from}"><b>${esc(s.name)}</b>${s.chords.map((c) =>
+      `<span class="ch" data-from="${c.from}" data-to="${c.to}">${esc(c.name)}</span>`).join("") || `<span class="sub">no chords</span>`}</div>`).join("");
+}
+
+function npTick() {
+  if (tab !== "now") return;
+  const p = np.info;
+  if (p && p.title) {
+    const t = Math.max(0, npTime() - np.offset);
+    $("#np-pos").textContent = fmtT(t); $("#np-dur").textContent = fmtT(p.duration || 0);
+    $("#np-fill").style.width = p.duration ? `${Math.min(100, (t / p.duration) * 100)}%` : "0";
+  }
+  if (!npUsingTab()) return;
+  const d = np.tab, t = npTime();
+  const end = d.bars[d.bars.length - 1].end;
+  if (t > end + 3) {  // past the end of the tab: a different (longer) version, or not this song
+    if (np.lastDraw !== "end") {
+      np.lastDraw = "end"; np.key = { root: d.key.root, minor: d.key.minor };
+      $("#np-section").textContent = "After the tab's end"; $("#np-next").textContent = "-"; $("#np-in").textContent = "";
+      setNpChord("", "", "from the tab");
+      $("#np-src").innerHTML = `This is ${fmtT(t)} in, but Songsterr's tab ends at ${fmtT(end)}: maybe a longer version (or not a song). Try <b>By ear</b>.`;
+    }
+    return;
+  }
+  const bi = Math.max(0, lastAt(d.bars, t, (b) => b.t)), bar = d.bars[bi];
+  const section = d.bars.slice(0, bi + 1).reverse().find((b) => b.section)?.section || "Start";
+  const nextBar = d.bars.slice(bi + 1).find((b) => b.chord && b.chord !== bar.chord);
+  np.key = { root: d.key.root, minor: d.key.minor };
+  $("#np-section").textContent = section;
+  $("#np-next").textContent = nextBar ? nextBar.chord : "-";
+  $("#np-in").textContent = nextBar ? `in ${Math.max(0, nextBar.t - t).toFixed(1)} s` : "";
+  const sig = `${bi}|${bar.chord}`;
+  if (sig !== np.lastDraw) {
+    np.lastDraw = sig;
+    setNpChord(bar.chord || "", nextBar ? nextBar.chord : "", "from the tab");
+    document.querySelectorAll("#np-map .ch").forEach((el) => el.classList.toggle("now", bi >= +el.dataset.from && bi <= +el.dataset.to));
+    const secs = [...document.querySelectorAll("#np-map .sec")];
+    const cur = secs.filter((el) => +el.dataset.from <= bi).pop();
+    secs.forEach((el) => el.classList.toggle("on", el === cur));
+  }
+}
+setInterval(npTick, 100);  // a timer, not animation frames: keeps going when the window is in the background
+
+function setNpChord(name, next, keySub) {
+  np.chord = name;
+  $("#np-chord").textContent = name || "-";
+  const k = np.key;
+  $("#np-key").textContent = k ? `${NOTES[k.root]} ${k.minor ? "minor" : "major"}` : "listening...";
+  $("#np-keysub").textContent = k ? keySub : "";
+  npImprov(next);
+  drawNow();
+}
+
+function npImprov(next) {
+  const k = np.key, c = chordInfo(np.chord), n = chordInfo(next);
+  if (!k) { $("#np-improv").innerHTML = ""; return; }
+  const pent = NP_SCALES.pent(k.minor), rootName = NOTES[k.root];
+  const lowE = ((k.root - 40 % 12) % 12 + 12) % 12 || 12;
+  const chip = (pc) => `<span class="${pc === k.root ? "root" : c && c.tones.includes(pc) ? "chord" : ""}">${NOTES[pc]}</span>`;
+  $("#np-improv").innerHTML = `
+    <div class="card"><p class="label">NOTES TO IMPROVISE WITH</p>
+      <p class="notes">${pent.map((i) => chip((k.root + i) % 12)).join("")}</p>
+      <p class="sub">The ${k.minor ? "minor" : "major"} pentatonic of ${rootName}: none of these sound wrong over this song.</p></div>
+    <div class="card"><p class="label">LAND ON THESE NOW</p>
+      ${c ? `<p class="notes">${c.tones.map((pc) => `<span class="chord">${NOTES[pc]}</span>`).join("")}</p>
+      <p class="sub">The notes of ${esc(np.chord)}. End a phrase on one of them and it sounds "right".</p>` : `<p class="sub">Waiting for a chord...</p>`}
+      ${n ? `<p class="sub">Next: <b>${esc(next)}</b> (${n.tones.map((pc) => NOTES[pc]).join(" ")})</p>` : ""}</div>
+    <div class="card"><p class="label">WHERE TO START</p>
+      <p>${lowE === 12 ? `The <b>open thick E string</b> (or fret 12) is <b>E</b>, the home note.` : `Put your first finger on <b>fret ${lowE}</b> of the thick E string: that's <b>${rootName}</b>, the home note.`}</p>
+      <p class="sub">Play the dots around it (Area: Box 1). Bend or hold the green ones.</p></div>`;
+}
+
+function drawNow() {
+  if (tab !== "now") return;
+  const k = np.key, c = chordInfo(np.chord), which = $("#np-scale").value;
+  let key = k, scale = k ? NP_SCALES[which](k.minor) : [];
+  if (which === "chord" && c) { key = { root: c.root, minor: c.minor }; scale = [0]; }
+  const d = npUsingTab() ? np.tab : null;
+  fretboard($("#np-board"), { tuning: d ? d.tuning : live.tuning, key, scale, chordTones: c ? c.tones : [],
+    labels: $("#np-labels").value, area: $("#np-area").value, frets: 15 });
+}
+["np-scale", "np-labels", "np-area"].forEach((id) => $("#" + id).addEventListener("change", drawNow));
+new ResizeObserver(drawNow).observe($("#np-board"));
+
+// by ear: the same steady approach as Live notes (1.2 s average, in-key bonus, a change must last about a bar)
+async function npEar() {
+  if (tab !== "now" || npUsingTab() || !(np.info && np.info.title)) return;
+  let d;
+  try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
+  if (!d.live || d.rms < 0.004) { $("#np-section").textContent = d.error ? "Can't hear" : "Silent"; return; }
+  $("#np-section").textContent = "by ear"; $("#np-next").textContent = "?"; $("#np-in").textContent = "";
+  if (d.onset) { const b = $("#np-beat"); b.classList.remove("on"); void b.offsetWidth; b.classList.add("on"); }
+  const e = np.ear, kk = Math.exp(-0.12 / 1.2), now = performance.now() / 1000;
+  e.smooth = e.smooth.map((v, i) => v * kk + d.chroma[i] * (1 - kk));
+  e.acc = e.acc.map((v, i) => v * 0.997 + d.chroma[i]);
+  const g = guessKey(e.acc);
+  if (!e.keyCand || g.root !== e.keyCand.root || g.minor !== e.keyCand.minor) { e.keyCand = g; e.keySince = now; }
+  if (!np.key || (now - e.keySince > 8 && (np.key.root !== g.root || np.key.minor !== g.minor))) np.key = { root: g.root, minor: g.minor };
+  const cand = detectChord(e.smooth, np.key), id = (x) => x && `${x.root}${x.q}`;
+  if (!e.chord || (id(cand) !== id(e.chord) && id(cand) === id(e.cand) && now - e.since > 1.6 && cand.margin > 0.05)) {
+    e.chord = cand; setNpChord(NOTES[cand.root] + cand.q, "", "heard from the music");
+  } else if (id(cand) !== id(e.cand)) { e.cand = cand; e.since = now; }
+}
+setInterval(npEar, 120);
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.npsrc) {
+    np.src = b.dataset.npsrc; np.lastDraw = "";
+    document.querySelectorAll("[data-npsrc]").forEach((x) => x.classList.toggle("on", x === b));
+    np.ear.chord = null; npSourceNote();
+  }
+  if (b.dataset.npnudge && np.tabId) {
+    np.offset = Math.round((np.offset + Number(b.dataset.npnudge)) * 100) / 100;
+    localStorage.setItem("np-offset-" + np.tabId, np.offset);
+    $("#np-off").textContent = `${np.offset >= 0 ? "+" : ""}${np.offset.toFixed(2)} s`;
+  }
+  if (b.id === "np-open" && api() && np.info && np.info.title) {
+    if (np.info.match) api().browser_go(np.info.match.url); else api().browser_search(`${np.info.artist} ${np.info.title}`.trim());
+    setTab("songsterr");
+  }
+});

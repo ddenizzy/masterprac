@@ -2,3 +2,7 @@
 data/
 __pycache__/
 .DS_Store
+data/checkup*.png
+data/page.js
+data/goto.txt
+tools/libnowplaying.dylib

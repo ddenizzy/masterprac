@@ -124,6 +124,32 @@ def tab():
         return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
 
 
+# ---------- NOW PLAYING: whatever plays on the Mac, in any app ----------
+_matches = {}  # "title|artist" -> Songsterr match (or None), looked up once
+
+
+@app.get("/api/now")
+def now():
+    """What's playing in any app + its Songsterr version (if Songsterr has that exact song)."""
+    p = h.now_playing()
+    if p.get("title"):
+        k = f"{p['title']}|{p['artist']}".lower()
+        if k not in _matches:
+            _matches[k] = h.songsterr_match(p["title"], p["artist"])
+        p["match"] = _matches[k]
+    return jsonify(p)
+
+
+@app.get("/api/now/tab/<int:song_id>")
+def now_tab(song_id):
+    """Chords per bar, bar times, key (and the lead notes) of a Songsterr song, for the Now playing page."""
+    import tabs
+    try:
+        return jsonify(tabs.load(song_id))
+    except Exception as e:
+        return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
+
+
 @app.get("/api/pos")
 def pos():
     """Where Spotify is in the song right now (it keeps playing muted), for following the tab."""

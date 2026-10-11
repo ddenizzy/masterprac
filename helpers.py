@@ -180,3 +180,73 @@ def songsterr_song_from_url(url):
     return {"id": meta["songId"], "title": meta["title"], "artist": meta["artist"], "url": url,
             "tracks": [{"name": t.get("name", ""), "instrument": t.get("instrument", ""), "tuning": t.get("tuning")}
                        for t in meta.get("tracks", [])]}
+
+
+# ---------- what's playing in ANY app (macOS Now Playing) ----------
+TOOLS = Path(__file__).parent / "tools"
+
+
+def _np_lib():
+    """The Now Playing library, built from tools/nowplaying.swift the first time (or after it changes)."""
+    lib, src = TOOLS / "libnowplaying.dylib", TOOLS / "nowplaying.swift"
+    if not lib.exists() or lib.stat().st_mtime < src.stat().st_mtime:
+        subprocess.run(["swiftc", "-O", "-emit-library", str(src), "-o", str(lib)], capture_output=True, timeout=300)
+    return lib
+
+
+def _clean_app(name):
+    """'Safari Graphics and Media' / 'Google Chrome Helper' -> 'Safari' / 'Google Chrome'."""
+    return re.sub(r"\s+(Graphics and Media|Web Content|Networking|Helper.*)$", "", name or "").strip()
+
+
+def clean_song(title, artist):
+    """Song + artist from player text, e.g. YouTube's 'Radiohead - Creep (Official Video)' by 'RadioheadVEVO'."""
+    t, a = title or "", artist or ""
+    t = re.sub(r"\s*[\(\[][^)\]]*(official|video|audio|lyric|visuali[sz]er|hd|4k|remaster|live at|mv)[^)\]]*[\)\]]", "", t, flags=re.I)
+    t = re.sub(r"\s*\|.*$|\s+-\s+YouTube$", "", t).strip()
+    a = re.sub(r"\s*-\s*Topic$|VEVO$|\s*Official$", "", a, flags=re.I).strip()
+    m = re.match(r"^(.+?)\s+[-–—]\s+(.+)$", t)
+    if m and (not a or _norm(m.group(1)) in _norm(a) or _norm(a) in _norm(m.group(1))):
+        a, t = m.group(1).strip(), m.group(2).strip()
+    t = re.sub(r"\s*[\(\[]?(ft\.?|feat\.?)\s.*$", "", t, flags=re.I).strip()
+    return t, a
+
+
+def _norm(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def now_playing():
+    """{'title', 'artist', 'app', 'playing', 'pos', 'duration', 'at'} for whatever plays on the Mac, or {'playing': False}."""
+    try:
+        out = subprocess.run(["/usr/bin/perl", str(TOOLS / "nowplaying.pl"), str(_np_lib())],
+                             capture_output=True, text=True, timeout=6).stdout
+        d = json.loads(out.strip().splitlines()[-1])
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return {"playing": False, "title": ""}
+    if not d.get("title"):
+        return {"playing": False, "title": ""}
+    title, artist = clean_song(d["title"], d.get("artist", ""))
+    pos = d.get("elapsed", 0) + (d.get("now", 0) - d.get("timestamp", 0)) * d.get("rate", 0)
+    return {"title": title, "artist": artist, "raw_title": d["title"], "app": _clean_app(d.get("app")),
+            "playing": d.get("rate", 0) > 0, "pos": round(pos, 3), "duration": d.get("duration", 0), "at": time.time()}
+
+
+def songsterr_match(title, artist):
+    """Songsterr's version of a song only if it really is that song (titles must match; artists too if known)."""
+    if not title:
+        return None
+    try:
+        hits = requests.get(f"{SONGSTERR}/api/songs", params={"pattern": f"{artist} {title}".strip(), "size": 10}, timeout=10).json()
+    except (requests.RequestException, ValueError):
+        return None
+    t, a = _norm(re.sub(r"\(.*?\)", "", title)), _norm(artist)
+    for hit in hits or []:
+        ht, ha = _norm(re.sub(r"\(.*?\)", "", hit["title"])), _norm(hit["artist"])
+        if not a:  # no artist known (a video, a show...): only the exact same title counts
+            close = _norm(hit["title"]) == _norm(title)
+        else:
+            close = ht == t or (len(t) > 4 and (ht.startswith(t) or t.startswith(ht)))
+        if ht and close and (not a or a in ha or ha in a or ha.replace("the", "") == a.replace("the", "")):
+            return {"id": hit["songId"], "title": hit["title"], "artist": hit["artist"], "url": songsterr_url(hit)}
+    return None

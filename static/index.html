@@ -11,6 +11,7 @@
     <div class="brand"><b>MasterPrac</b><span id="song-chip" class="song-chip">No song yet</span></div>
     <nav class="tabs">
       <button class="tab active" data-tab="songsterr">Songsterr</button>
+      <button class="tab" data-tab="now">Now playing</button>
       <button class="tab" data-tab="notes">Live notes</button>
       <button class="tab" data-tab="amp">Amp &amp; tone</button>
       <button class="tab" data-tab="learn">Learn</button>
@@ -37,10 +38,48 @@
     <div id="browser-area" class="browser-area"><p>Loading Songsterr...</p></div>
   </section>
 
+  <!-- NOW PLAYING: whatever plays on the Mac (any app): its chords, what to improvise with, the fretboard -->
+  <section class="view hidden" id="view-now">
+    <div class="np-head">
+      <div class="np-song">
+        <span class="now-label" id="np-app">NOTHING PLAYING</span>
+        <h2 id="np-title">Play a song in any app</h2>
+        <p class="sub" id="np-artist">Spotify, YouTube in Safari or Chrome, Apple Music... MasterPrac follows it.</p>
+        <div class="np-time"><span id="np-pos">0:00</span><div class="np-bar"><i id="np-fill"></i></div><span id="np-dur">0:00</span></div>
+      </div>
+      <div class="np-actions">
+        <button id="np-open" disabled>Open Songsterr version</button>
+        <div class="seg"><button class="seg-b on" data-npsrc="tab" title="The song's real chords from its Songsterr tab, in time with the music">Chords from the tab</button><button class="seg-b" data-npsrc="ear" title="MasterPrac listens to the music and works out the chords">By ear</button></div>
+        <span class="sub" id="np-src"></span>
+      </div>
+    </div>
+    <div class="np-row">
+      <div class="np-box big"><span class="now-label">CHORD NOW</span><b id="np-chord">-</b><i class="beat" id="np-beat"></i></div>
+      <div class="np-box"><span class="now-label">NEXT</span><b id="np-next">-</b><span class="sub" id="np-in"></span></div>
+      <div class="np-box"><span class="now-label">PART OF THE SONG</span><b id="np-section">-</b></div>
+      <div class="np-box"><span class="now-label">KEY</span><b id="np-key">-</b><span class="sub" id="np-keysub"></span></div>
+      <span class="nudge np-nudge hidden" id="np-nudge">chords early/late? <button class="ghost icon" data-npnudge="-0.25" title="Chords change too late">&#8722;</button><span id="np-off">0.00 s</span><button class="ghost icon" data-npnudge="0.25" title="Chords change too early">+</button></span>
+    </div>
+    <div class="np-improv" id="np-improv"></div>
+    <div class="np-controls">
+      <label>Notes to show <select id="np-scale">
+        <option value="pent">The 5 safest (pentatonic)</option><option value="full">All 7 notes of the key</option><option value="blues">Bluesy (pentatonic + blue note)</option><option value="chord">Only the chord playing now</option></select></label>
+      <label>Dots show <select id="np-labels"><option value="names">Note names (A, C#)</option><option value="intervals">Note jobs (R, b3, 5)</option></select></label>
+      <label>Area <select id="np-area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
+      <div class="legend">
+        <span><i class="dot root"></i>Home note (key)</span>
+        <span><i class="dot chord"></i>Notes of the chord playing NOW: land on these</span>
+        <span><i class="dot scale"></i>Safe to pass through</span>
+      </div>
+    </div>
+    <div class="board-wrap"><svg id="np-board" class="board"></svg></div>
+    <div class="np-map" id="np-map"></div>
+  </section>
+
   <!-- LIVE NOTES -->
   <section class="view hidden" id="view-notes">
     <div class="follow">
-      <div class="seg"><button class="seg-b on" data-follow="tab">Follow the tab (exact notes)</button><button class="seg-b" data-follow="listen">Listen to the music</button></div>
+      <div class="seg"><button class="seg-b on" data-follow="tab" title="Shows exactly which string and fret the song's lead guitarist plays, in time with Spotify">Play along with the lead guitar</button><button class="seg-b" data-follow="listen" title="MasterPrac listens to the music and shows the chord + safe notes">Chords by ear</button></div>
       <div class="tabinfo" id="tabinfo"></div>
     </div>
     <div class="notes-top">
@@ -108,6 +147,10 @@
     <div class="panel">
       <h2>How MasterPrac works</h2>
       <ol class="points">
+        <li><b>Now playing:</b> follows whatever plays on your Mac in any app (Spotify, YouTube, Apple Music...). It finds the song on
+          Songsterr and shows the chord now, the next chord, every part's chords, the notes to improvise with and where they are on the neck.
+          No tab for it? It works the chords out by ear.</li>
+        <li><b>Live notes:</b> "Play along with the lead guitar" shows the exact string and fret the song's guitarist plays, in time with Spotify.</li>
         <li><b>Songsterr tab:</b> a browser built into the app. Open any song; MasterPrac recognises it and the other tabs follow it.</li>
         <li><b>When it opens,</b> it finds the song Spotify is playing, mutes Spotify (still playing, so your minutes count; paused on battery)
           and moves the Mac's sound to your HeadRush over Bluetooth.</li>

@@ -70,17 +70,7 @@ class Browser:
 
     def _ensure(self):
         if self.view is None:
-            # The window's content is the app's own web view; things added INSIDE a web view can stay invisible on
-            # new macOS. So: a plain container holds the app page and the Songsterr view side by side (Songsterr on top).
-            win = self.window.native
-            page = win.contentView()
-            content = FlippedView.alloc().initWithFrame_(page.frame())
-            content.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
-            win.setContentView_(content)
-            page.setFrame_(content.bounds())
-            page.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
-            content.addSubview_(page)
-            win.makeFirstResponder_(page)
+            self.container = None
             cfg = WKWebViewConfiguration.alloc().init()
             try:  # macOS 14+: a named persistent store just for MasterPrac
                 store = WKWebsiteDataStore.dataStoreForIdentifier_(NSUUID.alloc().initWithUUIDString_(STORE_ID))
@@ -94,13 +84,33 @@ class Browser:
             self.view.setUIDelegate_(self.popups)
             print("  browser store persistent:", bool(store.isPersistent()), flush=True)
             self.view.setHidden_(True)
-            content.addSubview_(self.view)
+            self._mount()
             self.go(SESSION.get("start_url") or h.SONGSTERR)
         return self.view
+
+    def _mount(self):
+        """The window's content is the app's own web view; things added INSIDE a web view can stay invisible on
+        new macOS. So a plain container holds the app page and the Songsterr view side by side (Songsterr on top).
+        Right after startup the window may put its page back as the content: then this simply mounts again."""
+        win = self.window.native
+        if self.container is not None and win.contentView() is self.container:
+            return
+        page = win.contentView()
+        content = FlippedView.alloc().initWithFrame_(page.frame())
+        content.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+        win.setContentView_(content)
+        page.setFrame_(content.bounds())
+        page.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+        content.addSubview_(page)
+        self.view.removeFromSuperview()
+        content.addSubview_(self.view)
+        win.makeFirstResponder_(page)
+        self.container, self.page = content, page
 
     def place(self, x, y, w, hgt):
         """Show the browser over the page's browser area (CSS pixels from the top-left)."""
         v = self._ensure()
+        self._mount()
         content_h = self.window.native.contentView().frame().size.height
         flipped = self.window.native.contentView().isFlipped()
         v.setFrame_(NSMakeRect(x, y if flipped else content_h - y - hgt, w, hgt))
@@ -162,6 +172,28 @@ class Browser:
             rep.representationUsingType_properties_(NSBitmapImageFileTypePNG, {}).writeToFile_atomically_(str(h.DATA / "checkup.png"), True)
             print("  checkup picture saved", flush=True)
         v.takeSnapshotWithConfiguration_completionHandler_(None, snap)
+        self._snap_page()
+
+    def _snap_page(self):
+        """The app's own page: run data/page.js in it first (if there), then save data/checkup-page.png."""
+        self._mount()
+        page = self.page
+        js = h.DATA / "page.js"
+        if js.exists() and hasattr(page, "evaluateJavaScript_completionHandler_"):
+            page.evaluateJavaScript_completionHandler_(js.read_text(), None)
+
+        def later():
+            def snap(image, error):
+                if image is not None:
+                    from AppKit import NSBitmapImageRep, NSBitmapImageFileTypePNG
+                    rep = NSBitmapImageRep.imageRepWithData_(image.TIFFRepresentation())
+                    rep.representationUsingType_properties_(NSBitmapImageFileTypePNG, {}).writeToFile_atomically_(str(h.DATA / "checkup-page.png"), True)
+                    print("  checkup page picture saved", flush=True)
+            if hasattr(page, "takeSnapshotWithConfiguration_completionHandler_"):
+                page.takeSnapshotWithConfiguration_completionHandler_(None, snap)
+            else:
+                print(f"  checkup: page is a {type(page).__name__}", flush=True)
+        AppHelper.callLater(3.0, later)
 
 
 class Api:
@@ -249,6 +281,8 @@ def watch_browser(browser):
                 if not guide.get(song, on_ready=lambda sid: log(f"Tone guide ready for \"{song['title']}\" (Amp & tone tab).")):
                     log(f"Writing the tone guide for \"{song['title']}\" (about 20 seconds)...")
         threading.Thread(target=lookup, daemon=True).start()
+    if browser.view is not None:
+        browser._mount()  # self-repair if the window swapped its page back in
     title = browser.title()
     if title != getattr(browser, "last_title", None):
         browser.last_title = title
