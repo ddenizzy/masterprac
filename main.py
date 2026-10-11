@@ -11,6 +11,7 @@ Closing the app:  sound goes back to the Kali speakers and Spotify's volume come
 The amp keeps whatever rig it had; MasterPrac never changes your saved rigs.
 """
 import sys
+import re
 import threading
 import warnings
 
@@ -23,9 +24,19 @@ import objc
 from Foundation import NSObject, NSUUID
 from WebKit import WKWebView, WKWebViewConfiguration, WKWebsiteDataStore
 
-# look like Safari: some sign-ins (Google) refuse "embedded" browsers
+def _safari_version():
+    """The Safari version installed on this Mac (sites block old/fake versions, e.g. Songsterr refuses 18.0)."""
+    import plistlib
+    try:
+        with open("/Applications/Safari.app/Contents/Info.plist", "rb") as f:
+            return plistlib.load(f)["CFBundleShortVersionString"]
+    except (OSError, KeyError, ValueError):
+        return "26.0"
+
+
+# look like the real Safari: some sign-ins (Google) refuse "embedded" browsers
 SAFARI_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "
-             "Version/18.0 Safari/605.1.15")
+             f"Version/{_safari_version()} Safari/605.1.15")
 # one fixed, permanent website-data store for MasterPrac's browser: your Songsterr login (cookies) survives restarts
 STORE_ID = "6F0C2B8E-5A1D-4C7B-9E3F-4D2A8B6C1E70"
 
@@ -100,6 +111,9 @@ class Browser:
 
     def url(self):
         return str(self.view.URL().absoluteString()) if self.view is not None and self.view.URL() else None
+
+    def title(self):
+        return str(self.view.title() or "") if self.view is not None else ""
 
 
 class Api:
@@ -187,6 +201,13 @@ def watch_browser(browser):
                 if not guide.get(song, on_ready=lambda sid: log(f"Tone guide ready for \"{song['title']}\" (Amp & tone tab).")):
                     log(f"Writing the tone guide for \"{song['title']}\" (about 20 seconds)...")
         threading.Thread(target=lookup, daemon=True).start()
+    title = browser.title()
+    if title != getattr(browser, "last_title", None):
+        browser.last_title = title
+        if re.search(r"\b(403|404|forbidden|not found|access denied)\b", title, re.I):
+            log(f"Songsterr showed an error page: \"{title}\". Try Reload, or search the song again.")
+        else:
+            print(f"  page: {title}", flush=True)
     AppHelper.callLater(1.5, watch_browser, browser)
 
 
@@ -214,6 +235,12 @@ def main():
     api._browser = Browser(window)
     window.events.closing += end_session
 
+    def polite_quit(*_):  # macOS / logout / Terminal asking us to stop: tidy up like the close button would
+        end_session()
+        AppHelper.callAfter(window.destroy)
+    import signal
+    signal.signal(signal.SIGTERM, polite_quit)
+
     def on_start():
         AppHelper.callAfter(lambda: NSApp.activateIgnoringOtherApps_(True))  # open in front
         threading.Thread(target=start_session, args=(api,), daemon=True).start()
@@ -231,6 +258,7 @@ def main():
         webview.start(on_start)
     finally:
         end_session()
+        print("  MasterPrac closed.", flush=True)
 
 
 if __name__ == "__main__":
