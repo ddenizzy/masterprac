@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MasterPrac</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>MasterPrac</h1>
+      <p class="tag">Learn keys and improv on the songs you love, with your HeadRush.</p>
+    </div>
+    <button class="ghost" id="help-btn">How this works</button>
+  </header>
+
+  <section class="help hidden" id="help">
+    <h2>How MasterPrac works</h2>
+    <ol>
+      <li><b>Left window = Songsterr.</b> Open any song there; MasterPrac notices which song it is.</li>
+      <li><b>This panel</b> shows the song, where your sound goes, your amp and (soon) the fretboard with the notes you can play.</li>
+      <li><b>When it opened,</b> MasterPrac found the song Spotify was playing, muted Spotify (or paused it on battery),
+        and moved the Mac's sound to your HeadRush over Bluetooth. The list at the bottom says exactly what it did.</li>
+      <li><b>When you close it,</b> the sound goes back to your Kali speakers and Spotify's volume comes back.</li>
+      <li><b>Your saved rigs are never changed.</b> Tone ideas go into one practice rig until you choose to save them.</li>
+    </ol>
+  </section>
+
+  <main class="grid">
+    <section class="card wide">
+      <p class="label">Song</p>
+      <div id="song"><p class="muted">Open a song in the Songsterr window on the left.</p></div>
+    </section>
+
+    <section class="card">
+      <p class="label">Where your sound goes</p>
+      <p class="explain">The Mac's sound (Songsterr, backing tracks) can play through your amp, mixed with your guitar.</p>
+      <div id="route"></div>
+      <div class="row">
+        <button data-sound="amp">Play through amp</button>
+        <button class="ghost" data-sound="speakers">Play through Kali speakers</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="label">Spotify</p>
+      <p class="explain">Muted while you practise when plugged in (still playing, so your minutes count); paused on battery.</p>
+      <div id="spotify"></div>
+    </section>
+
+    <section class="card soon">
+      <p class="label">Amp · coming next</p>
+      <p class="explain">Quick view of your rig and scenes, a tone designer for the open song, and a safe sound editor.</p>
+    </section>
+
+    <section class="card soon">
+      <p class="label">Fretboard · coming next</p>
+      <p class="explain">The song's key on a big guitar neck, with the notes that fit the chord playing right now lit up.</p>
+    </section>
+
+    <section class="card wide">
+      <p class="label">What MasterPrac did</p>
+      <ul class="log" id="log"></ul>
+    </section>
+  </main>
+  <div class="toast hidden" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
