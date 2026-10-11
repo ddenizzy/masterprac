@@ -17,7 +17,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 import webview
-from AppKit import NSApp, NSMakeRect, NSScreen
+from AppKit import NSApp, NSMakeRect, NSScreen, NSView, NSViewHeightSizable, NSViewWidthSizable
 from Foundation import NSURL, NSURLRequest
 from PyObjCTools import AppHelper
 import objc
@@ -39,6 +39,13 @@ SAFARI_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.
              f"Version/{_safari_version()} Safari/605.1.15")
 # one fixed, permanent website-data store for MasterPrac's browser: your Songsterr login (cookies) survives restarts
 STORE_ID = "6F0C2B8E-5A1D-4C7B-9E3F-4D2A8B6C1E70"
+
+
+class FlippedView(NSView):
+    """Plain container whose y runs top-down like a web page."""
+
+    def isFlipped(self):
+        return True
 
 
 class PopupDelegate(NSObject, protocols=[objc.protocolNamed("WKUIDelegate")]):
@@ -63,7 +70,17 @@ class Browser:
 
     def _ensure(self):
         if self.view is None:
-            content = self.window.native.contentView()
+            # The window's content is the app's own web view; things added INSIDE a web view can stay invisible on
+            # new macOS. So: a plain container holds the app page and the Songsterr view side by side (Songsterr on top).
+            win = self.window.native
+            page = win.contentView()
+            content = FlippedView.alloc().initWithFrame_(page.frame())
+            content.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            win.setContentView_(content)
+            page.setFrame_(content.bounds())
+            page.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            content.addSubview_(page)
+            win.makeFirstResponder_(page)
             cfg = WKWebViewConfiguration.alloc().init()
             try:  # macOS 14+: a named persistent store just for MasterPrac
                 store = WKWebsiteDataStore.dataStoreForIdentifier_(NSUUID.alloc().initWithUUIDString_(STORE_ID))
@@ -124,6 +141,12 @@ class Browser:
         f = v.frame()
         print(f"  checkup: hidden={bool(v.isHidden())} frame=({f.origin.x:.0f},{f.origin.y:.0f},{f.size.width:.0f}x{f.size.height:.0f}) "
               f"loading={bool(v.isLoading())} progress={v.estimatedProgress():.2f} url={self.url()} title={self.title()!r}", flush=True)
+
+        content = self.window.native.contentView()
+        cf = content.frame()
+        print(f"  checkup window: content={cf.size.width:.0f}x{cf.size.height:.0f} flipped={bool(content.isFlipped())} "
+              f"visible={bool(self.window.native.isVisible())} subviews(back->front)="
+              f"{[type(x).__name__ + ('*' if x is v else '') for x in content.subviews()]}", flush=True)
 
         def text(result, error):
             print(f"  checkup text: {str(result)[:600]!r} {error or ''}", flush=True)
