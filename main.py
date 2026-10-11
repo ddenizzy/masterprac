@@ -115,6 +115,31 @@ class Browser:
     def title(self):
         return str(self.view.title() or "") if self.view is not None else ""
 
+    def checkup(self):
+        """For fixing problems: where the browser is, what it shows, and a picture of it (data/checkup.png)."""
+        v = self.view
+        if v is None:
+            print("  checkup: browser not created yet", flush=True)
+            return
+        f = v.frame()
+        print(f"  checkup: hidden={bool(v.isHidden())} frame=({f.origin.x:.0f},{f.origin.y:.0f},{f.size.width:.0f}x{f.size.height:.0f}) "
+              f"loading={bool(v.isLoading())} progress={v.estimatedProgress():.2f} url={self.url()} title={self.title()!r}", flush=True)
+
+        def text(result, error):
+            print(f"  checkup text: {str(result)[:600]!r} {error or ''}", flush=True)
+        v.evaluateJavaScript_completionHandler_(
+            "document.readyState+' | links:'+document.links.length+' | '+(document.body?document.body.innerText.slice(0,500):'no body')", text)
+
+        def snap(image, error):
+            if image is None:
+                print(f"  checkup snapshot failed: {error}", flush=True)
+                return
+            from AppKit import NSBitmapImageRep, NSBitmapImageFileTypePNG
+            rep = NSBitmapImageRep.imageRepWithData_(image.TIFFRepresentation())
+            rep.representationUsingType_properties_(NSBitmapImageFileTypePNG, {}).writeToFile_atomically_(str(h.DATA / "checkup.png"), True)
+            print("  checkup picture saved", flush=True)
+        v.takeSnapshotWithConfiguration_completionHandler_(None, snap)
+
 
 class Api:
     """Called from the page (window.pywebview.api.*); UI work hops to the main thread."""
@@ -240,6 +265,9 @@ def main():
         AppHelper.callAfter(window.destroy)
     import signal
     signal.signal(signal.SIGTERM, polite_quit)
+    signal.signal(signal.SIGUSR1, lambda *_: AppHelper.callAfter(api._browser.checkup))
+    # for fixing problems: open the address written in data/goto.txt
+    signal.signal(signal.SIGUSR2, lambda *_: AppHelper.callAfter(api._browser.go, (h.DATA / "goto.txt").read_text().strip()))
 
     def on_start():
         AppHelper.callAfter(lambda: NSApp.activateIgnoringOtherApps_(True))  # open in front

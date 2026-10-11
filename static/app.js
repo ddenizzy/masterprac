@@ -85,7 +85,27 @@ const SCALES = {
   "natural minor": [0, 2, 3, 5, 7, 8, 10], "major": [0, 2, 4, 5, 7, 9, 11], "dorian": [0, 2, 3, 5, 7, 9, 10],
   "mixolydian": [0, 2, 4, 5, 7, 9, 10],
 };
-$("#scale").innerHTML = Object.keys(SCALES).map((s) => `<option>${s}</option>`).join("");
+// plain-words name in the menu + what it's for (shown under the menus)
+const SCALE_INFO = {
+  "minor pentatonic": ["Minor pentatonic (start here)", "The 5 safest notes for a sad / rock / blues song. Almost nothing you play from these sounds wrong. Most rock solos use it."],
+  "major pentatonic": ["Major pentatonic (happy songs)", "The 5 safest notes for a happy / country / pop song. Same idea as minor pentatonic, brighter sound."],
+  "blues": ["Blues (minor pentatonic + 1)", "Minor pentatonic plus one spicy \"blue\" note. Slide through that extra note, don't stop on it."],
+  "natural minor": ["Natural minor (all 7 notes)", "Every note of a minor key. More notes = more melodic, but 2 of them can clash if you hold them. Try after the pentatonic."],
+  "major": ["Major (all 7 notes)", "Every note of a major key (do-re-mi). Try after the major pentatonic."],
+  "dorian": ["Dorian (jazzy / funky minor)", "A minor sound that's a bit brighter. Santana's \"Oye Como Va\", funk, and many Pink Floyd jams."],
+  "mixolydian": ["Mixolydian (bluesy major)", "A major sound with a rough edge. Classic rock and jam bands (Grateful Dead, Allman Brothers)."],
+};
+$("#scale").innerHTML = Object.keys(SCALES).map((s) => `<option value="${s}">${SCALE_INFO[s][0]}</option>`).join("");
+const SHOW_INFO = {
+  names: "Each dot shows its note name (A, C#...).",
+  intervals: "Each dot shows its job in the key: R = root (home), b3 = the sad minor note, 5 = the strong note, b7 = the bluesy note. Shapes stay the same in every key.",
+};
+function explainMenus() {
+  const area = $("#area").value;
+  $("#menu-help").innerHTML = `<b>Scale:</b> which notes are lit up. ${SCALE_INFO[$("#scale").value][1]}
+    <br><b>Show:</b> ${SHOW_INFO[$("#labels").value]}
+    <br><b>Area:</b> ${area === "all" ? "Every safe note on the whole neck." : `Box ${area} is one hand position (about 4 frets) where you can reach all the notes without sliding. Learn Box 1 first.`}`;
+}
 const live = { key: null, keyMinor: true, keySrc: "", chord: null, history: [], chroma: Array(12).fill(0), acc: Array(12).fill(0),
   tuning: [64, 59, 55, 50, 45, 40], userScale: false };
 
@@ -179,7 +199,8 @@ function drawBoard() {
   }
   svg.innerHTML = g;
 }
-["scale", "labels", "area"].forEach((id) => $("#" + id).addEventListener("change", () => { if (id === "scale") live.userScale = true; drawBoard(); }));
+["scale", "labels", "area"].forEach((id) => $("#" + id).addEventListener("change", () => { if (id === "scale") live.userScale = true; explainMenus(); drawBoard(); }));
+explainMenus();
 new ResizeObserver(drawBoard).observe($("#board"));
 
 function showKey() {
@@ -187,6 +208,7 @@ function showKey() {
   $("#key-name").textContent = k ? `${NOTES[k.root]} ${k.minor ? "minor" : "major"}` : "listening...";
   $("#key-src").textContent = live.keySrc;
   if (k && !live.userScale) $("#scale").value = k.minor ? "minor pentatonic" : "major pentatonic";
+  explainMenus();
 }
 
 // ~8 times a second while the LIVE NOTES tab is open. Stable on purpose (from chord-recognition research):

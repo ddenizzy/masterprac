@@ -160,3 +160,6 @@ body.tabmode .controls label:has(#focus), body.tabmode #hold { display: none; }
 #ask-form { display: flex; gap: 8px; }
 #ask-form input { flex: 1; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 14px var(--font); }
 @media (max-width: 980px) { .learn { grid-template-columns: 1fr; overflow: auto; } }
+
+.menu-help { margin: 4px 0 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.menu-help b { color: var(--text, inherit); }
