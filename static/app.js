@@ -1741,3 +1741,36 @@ document.addEventListener("click", (e) => {
 });
 const _applyTabPr = applyTab;
 applyTab = function (d, keep) { _applyTabPr(d, keep); if (PR.on) prSections(); };  // eslint-disable-line no-func-assign
+
+/* ---------- lyrics check: the tab's words vs the recording's timed lyrics (LRCLIB) ----------
+   Each line found in both gives "tab time - recording time" at that point of the song: sync points without listening,
+   which also show a recording that's a bit faster or slower than the tab. */
+async function lyricsCheck(d, id) {
+  if (PR.on || !(d.lyrics && d.lyrics.length)) return;
+  let l;
+  try { l = await (await fetch("/api/lyrics")).json(); } catch (e) { return; }
+  if (P.songId !== id || !l.lines || l.lines.length < 3) return;
+  const key = (txt) => txt.toLowerCase().replace(/-/g, "").replace(/[^a-z0-9ğüşöçıİ ]/g, "").split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
+  const tabLines = sheetLines(d).map((x) => ({ t: x.t, k: key(x.text) })).filter((x) => x.k.split(" ").length >= 2);
+  const used = new Set(), pts = [];
+  for (const [t, line] of l.lines) {
+    const k = key(line);
+    if (k.split(" ").length < 2) continue;
+    // the same words in the tab, the closest one in time (repeated choruses)
+    const cand = tabLines.map((x, i) => ({ ...x, i })).filter((x) => x.k === k && !used.has(x.i))
+      .sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0];
+    if (cand && Math.abs(cand.t - t) < 15) { used.add(cand.i); pts.push({ pos: t, off: cand.t - t }); }
+  }
+  if (pts.length < 3) return;
+  const offs = pts.map((p) => p.off).sort((a, b) => a - b), med = offs[Math.floor(offs.length / 2)];
+  const good = pts.filter((p) => Math.abs(p.off - med) < 1);
+  if (good.length < 3) return;
+  P.lyricPoints = good;
+  if (!SYNC.points || SYNC.points.length < 2) {  // start from the lyrics; listening refines it
+    SYNC.points = good.map((p) => ({ ...p }));
+    P.offset = Math.round(med * 100) / 100; showOffset(); P.sig = "";
+    if (SYNC.state !== "locked") { SYNC.state = "locked"; syncStatus(`In sync ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s · from lyrics`, true); }
+  }
+}
+const _applyTabLy = applyTab;
+applyTab = function (d, keep) { _applyTabLy(d, keep); if (!keep && !d.error) lyricsCheck(d, P.songId); };  // eslint-disable-line no-func-assign
