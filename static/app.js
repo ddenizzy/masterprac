@@ -27,6 +27,7 @@ window.addEventListener("pywebviewready", placeBrowser);
 
 function setTab(name) {
   tab = name;
+  try { sessionStorage.setItem("mp-tab", name); } catch (e) { /* fine */ }
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.id !== `view-${name}`));
   closePops();
@@ -79,11 +80,18 @@ $("#search").addEventListener("submit", (e) => {
 });
 refresh();
 setInterval(refresh, 2000);
+// a page refresh keeps you on the tab you were on (after everything below has loaded)
+window.addEventListener("load", () => { try { const t = sessionStorage.getItem("mp-tab"); if (t && t !== "songsterr" && document.querySelector(`[data-tab="${t}"]`)) setTab(t); } catch (e) { /* fine */ } });
 
 /* ======================= music: notes, keys, chords ======================= */
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLATS = { Db: 1, Eb: 3, Gb: 6, Ab: 8, Bb: 10, Cb: 11, Fb: 4 };
 const noteIndex = (n) => (FLATS[n] ?? NOTES.indexOf(n.toUpperCase().replace("♯", "#")));
+// flat keys (F, Bb, Eb, Ab, Db major; D, G, C, F, Bb, Eb minor) are spelled with flats, like guitarists write them
+const NOTES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const useFlats = () => { const k = typeof P !== "undefined" && P.key; return !!k && (k.minor ? [2, 7, 0, 5, 10, 3] : [5, 10, 3, 8, 1]).includes(k.root); };
+const nn = (pc) => (useFlats() ? NOTES_FLAT : NOTES)[((pc % 12) + 12) % 12];
+const spell = (name) => !name || !useFlats() ? (name || "") : name.replace(/([A-G])#/g, (m, l) => NOTES_FLAT[(NOTES.indexOf(l) + 1) % 12]);
 const INTERVAL = ["R", "b2", "2", "b3", "3", "4", "b5", "5", "b6", "6", "b7", "7"];
 const SCALES = { pent: (m) => m ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9], full: (m) => m ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11],
   blues: (m) => m ? [0, 3, 5, 6, 7, 10] : [0, 2, 3, 4, 7, 9], chord: () => [] };
@@ -149,9 +157,9 @@ const lastAt = (arr, t, key) => { let lo = 0, hi = arr.length - 1, ans = -1; whi
 /* ======================= the fretboard ======================= */
 // o = {tuning, key, scale (intervals), chordTones, labels, area, frets, now, next}
 function fretboard(svg, o) {
-  const W = svg.clientWidth || 1000, H = svg.clientHeight || 230, FR = o.frets || 15;
+  const W = svg.clientWidth || 1000, H = svg.clientHeight || 300, FR = o.frets || 15;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const left = 50, right = 18, top = 34, bottom = 26;
+  const left = 58, right = 22, top = 40, bottom = 30;
   // real guitar spacing: frets get closer up the neck
   const scaleLen = (W - left - right) / (1 - Math.pow(2, -FR / 12));
   const fx = (f) => left + scaleLen * (1 - Math.pow(2, -f / 12));
@@ -161,31 +169,31 @@ function fretboard(svg, o) {
   const rootFret = key ? ((key.root - lowOpen) % 12 + 12) % 12 : 0;
   const boxFrom = area === "all" || !key ? 0 : (rootFret + [0, 3, 5, 7, 10][Number(area) - 1]) % 12;
   const inArea = (f) => area === "all" || !key || (f >= boxFrom - 1 && f <= boxFrom + 4) || (f >= boxFrom + 11 && f <= boxFrom + 16);
-  const r = Math.min(11, (H - top - bottom) / (strings - 1) / 2.3);
+  const r = Math.min(16, (H - top - bottom) / (strings - 1) / 2.25);
   let g = "";
   for (let f = 1; f <= FR; f++) g += `<line class="fret ${f === 12 ? "twelve" : ""}" x1="${fx(f)}" y1="${top}" x2="${fx(f)}" y2="${H - bottom}"/>`;
-  g += `<rect class="nut" x="${left - 5}" y="${top - 2}" width="6" height="${H - top - bottom + 4}"/>`;
-  for (const f of [3, 5, 7, 9, 15, 17, 19, 21].filter((f) => f <= FR)) g += `<circle class="inlay" cx="${(fx(f - 1) + fx(f)) / 2}" cy="${H - bottom + 14}" r="4"/>`;
-  g += `<circle class="inlay" cx="${(fx(11) + fx(12)) / 2 - 7}" cy="${H - bottom + 14}" r="4"/><circle class="inlay" cx="${(fx(11) + fx(12)) / 2 + 7}" cy="${H - bottom + 14}" r="4"/>`;
-  for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 18}">${f}</text>`;
+  g += `<rect class="nut" x="${left - 7}" y="${top - 3}" width="9" height="${H - top - bottom + 4}"/>`;
+  for (const f of [3, 5, 7, 9, 15, 17, 19, 21].filter((f) => f <= FR)) g += `<circle class="inlay" cx="${(fx(f - 1) + fx(f)) / 2}" cy="${H - bottom + 17}" r="5"/>`;
+  g += `<circle class="inlay" cx="${(fx(11) + fx(12)) / 2 - 8}" cy="${H - bottom + 17}" r="5"/><circle class="inlay" cx="${(fx(11) + fx(12)) / 2 + 8}" cy="${H - bottom + 17}" r="5"/>`;
+  for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 20}">${f}</text>`;
   tuning.forEach((open, s) => {
-    g += `<line class="string" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1 + s * 0.35}"/>`;
-    g += `<text class="sname" x="4" y="${sy(s) + 4}">${NOTES[open % 12]}</text>`;
+    g += `<line class="string" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1.6 + s * 0.6}"/>`;
+    g += `<text class="sname" x="4" y="${sy(s) + 4}">${nn(open % 12)}</text>`;
     for (let f = 0; f <= FR; f++) {
       const pc = (open + f) % 12;
       const isChord = chordTones.includes(pc), iv = key ? (pc - key.root + 12) % 12 : null;
       const inScale = key && scale.includes(iv);
       if (!(inScale || isChord) || !inArea(f)) continue;
       const cls = key && iv === 0 && (inScale || isChord) ? "root" : isChord ? "chord" : "scale";
-      const x = f === 0 ? left - 16 : (fx(f - 1) + fx(f)) / 2, label = mode === "intervals" && key ? INTERVAL[iv] : NOTES[pc];
-      g += `<g class="note ${cls} ${isChord ? "hot" : ""} ${o.dim ? "dim" : ""}"><circle cx="${x}" cy="${sy(s)}" r="${isChord ? r + 1.5 : r}"/><text x="${x}" y="${sy(s) + 4}">${label}</text></g>`;
+      const x = f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2, label = mode === "intervals" && key ? INTERVAL[iv] : nn(pc);
+      g += `<g class="note ${cls} ${isChord ? "hot" : ""} ${o.dim ? "dim" : ""}"><circle cx="${x}" cy="${sy(s)}" r="${isChord ? r + 1.5 : r}"/><text x="${x}" y="${sy(s) + 5}">${label}</text></g>`;
     }
   });
   // what the guitarist plays now (filled) and next (outlined), on the exact string/fret
   const spot = (s, f, cls) => {
     if (s >= strings) return "";
-    const x = f === 0 ? left - 16 : (fx(f - 1) + fx(f)) / 2;
-    return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? r + 4 : r + 2}"/><text x="${x}" y="${sy(s) + 4}">${f}</text></g>`;
+    const x = f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2;
+    return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? r + 5 : r + 3}"/><text x="${x}" y="${sy(s) + 5}">${f}</text></g>`;
   };
   for (const [s, f] of o.next || []) g += spot(s, f, "next");
   for (const [s, f] of o.now || []) g += spot(s, f, "play");
@@ -269,7 +277,7 @@ function drawTab() {
     const x = b.t * PX;
     h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6}">${i + 1}</text>`;
     if (b.section) h += `<text class="tsec" x="${x + 3}" y="14">${esc(b.section)}</text>`;
-    if (b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="31">${esc(b.chord)}</text>`;
+    if (b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="31">${esc(spell(b.chord))}</text>`;
     lastChord = b.chord;
   });
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
@@ -287,7 +295,7 @@ function drawTab() {
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
   $("#tab-names").innerHTML = `<rect class="tnames-bg" x="0" y="${y0 - 10}" width="24" height="${yEnd - y0 + 20}"/>` +
-    d.tuning.map((open, s) => `<text class="tname" x="12" y="${ys(s) + 4}">${NOTES[open % 12]}</text>`).join("");
+    d.tuning.map((open, s) => `<text class="tname" x="12" y="${ys(s) + 4}">${nn(open % 12)}</text>`).join("");
   layoutTab();
 }
 function layoutTab() {
@@ -343,7 +351,7 @@ function playTick() {
     const section = d.bars.slice(0, bi + 1).reverse().find((b) => b.section)?.section || "Start";
     $("#pl-section").textContent = section;
     $("#pl-barno").textContent = `bar ${bi + 1} of ${d.bars.length}`;
-    $("#pl-next").textContent = nextBar ? nextBar.chord : "-";
+    $("#pl-next").textContent = nextBar ? spell(nextBar.chord) : "-";
     document.querySelectorAll("#pl-map .ch").forEach((el) => el.classList.toggle("now", bi >= +el.dataset.from && bi <= +el.dataset.to));
     setChord(bar.chord || "", nextBar ? nextBar.chord : "");
     headsUp();
@@ -353,9 +361,9 @@ setInterval(playTick, 50);  // a timer, not animation frames: keeps going when t
 
 function setChord(name, next) {
   P.chord = name;
-  $("#pl-chord").textContent = name || "-";
+  $("#pl-chord").textContent = spell(name) || "-";
   const k = P.key;
-  $("#pl-key").textContent = k ? `${NOTES[k.root]} ${k.minor ? "minor" : "major"}` : "listening...";
+  $("#pl-key").textContent = k ? `${nn(k.root)} ${k.minor ? "minor" : "major"}` : "listening...";
   $("#pl-keysub").textContent = !k ? "" : usingTab() ? `from the tab${P.tab.tempo ? ` · ${Math.round(P.tab.tempo)} BPM` : ""}` : "heard from the music";
   foot(next);
   drawPlayBoard();
@@ -391,7 +399,7 @@ function headsUp(extra) {
 function foot(next) {
   const k = P.key, c = chordInfo(P.chord), n = chordInfo(next);
   if (!k) { $("#pl-foot").innerHTML = ""; return; }
-  const chip = (pc) => `<span class="${pc === k.root ? "root" : c && c.tones.includes(pc) ? "chord" : ""}">${NOTES[pc]}</span>`;
+  const chip = (pc) => `<span class="${pc === k.root ? "root" : c && c.tones.includes(pc) ? "chord" : ""}">${nn(pc)}</span>`;
   if (P.mode === "learn") {
     const strs = P.nowNotes.map(([s, f]) => `string ${s + 1} fret ${f}`).join(", ");
     $("#pl-foot").innerHTML = `<div><span class="kicker">PLAY NOW</span> ${strs ? `<b>${strs}</b>` : `<span class="sub">rest</span>`}</div>
@@ -401,9 +409,9 @@ function foot(next) {
   const lowE = ((k.root - (P.tab && usingTab() ? P.tab.tuning[P.tab.tuning.length - 1] : 40)) % 12 + 12) % 12;
   $("#pl-foot").innerHTML = `
     <div><span class="kicker">SAFE NOTES</span> <span class="notes">${SCALES.pent(k.minor).map((i) => chip((k.root + i) % 12)).join("")}</span></div>
-    <div><span class="kicker">LAND ON NOW</span> <span class="notes">${c ? c.tones.map((pc) => `<span class="chord">${NOTES[pc]}</span>`).join("") : "-"}</span>
-      ${n ? `<span class="sub">then ${esc(next)}: ${n.tones.map((pc) => NOTES[pc]).join(" ")}</span>` : ""}</div>
-    <div class="sub">Start at <b>${lowE === 0 ? "the open thickest string (or fret 12)" : `fret ${lowE} of the thickest string`}</b>: that's ${NOTES[k.root]}, home.</div>`;
+    <div><span class="kicker">LAND ON NOW</span> <span class="notes">${c ? c.tones.map((pc) => `<span class="chord">${nn(pc)}</span>`).join("") : "-"}</span>
+      ${n ? `<span class="sub">then ${esc(spell(next))}: ${n.tones.map((pc) => nn(pc)).join(" ")}</span>` : ""}</div>
+    <div class="sub">Start at <b>${lowE === 0 ? "the open thickest string (or fret 12)" : `fret ${lowE} of the thickest string`}</b>: that's ${nn(k.root)}, home.</div>`;
 }
 
 function drawPlayBoard() {
@@ -430,7 +438,7 @@ function buildMap() {
     else if (last) last.to = i;
   });
   $("#pl-map").innerHTML = secs.map((s) => `<div class="sec"><b>${esc(s.name)}</b><span class="sub">bar ${s.from + 1}</span>${s.chords.map((c) =>
-    `<span class="ch" data-from="${c.from}" data-to="${c.to}">${esc(c.name)}</span>`).join("") || `<span class="sub">no chords</span>`}</div>`).join("");
+    `<span class="ch" data-from="${c.from}" data-to="${c.to}">${esc(spell(c.name))}</span>`).join("") || `<span class="sub">no chords</span>`}</div>`).join("");
 }
 
 // by ear: 1.2 s average, chords in the key preferred, a change must hold ~1.6 s
@@ -448,7 +456,7 @@ async function playEar() {
   if (!P.key || (now - e.keySince > 8 && (P.key.root !== g.root || P.key.minor !== g.minor))) P.key = { root: g.root, minor: g.minor };
   const cand = detectChord(e.smooth, P.key), id = (x) => x && `${x.root}${x.q}`;
   if (!e.chord || (id(cand) !== id(e.chord) && id(cand) === id(e.cand) && now - e.since > 1.6 && cand.margin > 0.05)) {
-    e.chord = cand; setChord(NOTES[cand.root] + cand.q, "");
+    e.chord = cand; setChord(nn(cand.root) + cand.q, "");
   } else if (id(cand) !== id(e.cand)) { e.cand = cand; e.since = now; }
 }
 setInterval(playEar, 120);
@@ -582,21 +590,21 @@ loadSongs();
 /* ======================= LEARN: how keys work + ask Claude ======================= */
 function songKey() {
   const k = P.key || { root: 9, minor: true };
-  return { ...k, name: `${NOTES[k.root]} ${k.minor ? "minor" : "major"}`, rel: k.minor ? `${NOTES[(k.root + 3) % 12]} major` : `${NOTES[(k.root + 9) % 12]} minor` };
+  return { ...k, name: `${nn(k.root)} ${k.minor ? "minor" : "major"}`, rel: k.minor ? `${nn((k.root + 3) % 12)} major` : `${nn((k.root + 9) % 12)} minor` };
 }
-const scaleNotes = (root, ivs) => ivs.map((i) => NOTES[(root + i) % 12]).join(" ");
-function fretOf(note, open) { return ((NOTES.indexOf(note) - open % 12) + 12) % 12; }
+const scaleNotes = (root, ivs) => ivs.map((i) => nn((root + i) % 12)).join(" ");
+function fretOf(note, open) { return ((noteIndex(note) - open % 12) + 12) % 12; }
 function renderLessons() {
   const k = songKey(), song = (P.info && P.info.title) || "this song";
   const chords = usingTab() ? [...new Set(P.tab.bars.map((b) => b.chord).filter(Boolean))].slice(0, 7) : [];
   const pent = k.minor ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9], full = k.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
-  const rootLowE = fretOf(NOTES[k.root], 40), rootA = fretOf(NOTES[k.root], 45);
+  const rootLowE = fretOf(nn(k.root), 40), rootA = fretOf(nn(k.root), 45);
   const L = [
     ["1 · The 12 notes", `Music uses only <b>12 notes</b>: C, C#, D, D#, E, F, F#, G, G#, A, A#, B, then it repeats one octave higher.
       On the guitar, <b>each fret = one step</b> (a half step). Fret 12 is the same note as the open string, one octave up (that's why it has two dots).`],
     ["2 · What a key is", `A <b>key</b> is a "home" note plus a family of 7 notes that sound right together. ${esc(song)} is in <b>${k.name}</b>:
-      its home note is <b>${NOTES[k.root]}</b> and its family is <b>${scaleNotes(k.root, full)}</b>. Melodies and solos mostly use these notes,
-      and the song feels "finished" when it lands back on ${NOTES[k.root]}.`],
+      its home note is <b>${nn(k.root)}</b> and its family is <b>${scaleNotes(k.root, full)}</b>. Melodies and solos mostly use these notes,
+      and the song feels "finished" when it lands back on ${nn(k.root)}.`],
     ["3 · Major vs minor", `<b>Major</b> sounds bright/happy, <b>minor</b> sounds darker/sad. The difference is mostly one note, the <b>3rd</b>:
       4 frets above the root in major, <b>3 frets (the "b3")</b> in minor. ${k.name} shares all its notes with <b>${k.rel}</b> (its "relative" key):
       same notes, different home.`],
@@ -604,7 +612,7 @@ function renderLessons() {
       of a scale (the "chord tones"). This song's chords: <b>${chords.length ? chords.join(" · ") : "play a song and open the Play tab to see them"}</b>.
       <b>Improv secret:</b> landing on a <b>chord tone of the chord playing right now</b> always sounds good. That's what the green notes on the Play page show.`],
     ["5 · The pentatonic: your first improv tool", `The <b>${k.minor ? "minor" : "major"} pentatonic</b> keeps the 5 safest notes of the key:
-      <b>${scaleNotes(k.root, pent)}</b>. It has no "wrong" notes over this song. Start in <b>box 1</b>: the root ${NOTES[k.root]} is on
+      <b>${scaleNotes(k.root, pent)}</b>. It has no "wrong" notes over this song. Start in <b>box 1</b>: the root ${nn(k.root)} is on
       <b>fret ${rootLowE || 12} of the low E string</b> and fret ${rootA || 12} of the A string. In Play → Options choose <i>Part of the neck → Box 1</i>, then try
       boxes 2–5 to connect the whole neck.`],
     ["6 · Intervals: shapes that work in any key", `An <b>interval</b> is the distance from the root: <b>R</b> (root), <b>b3</b>, <b>3</b>, <b>5</b>, <b>b7</b>...
@@ -615,7 +623,7 @@ function renderLessons() {
     L.map(([t, body]) => `<details class="lesson"><summary>${t}</summary><p>${body}</p></details>`).join("") +
     `<div class="row"><button class="ghost" data-go="play">Try it on the fretboard &#8594;</button></div>`;
   const ideas = [`Which notes should I aim for over ${chords[0] || "the first chord"}?`, `How do I find the key of a song by ear?`,
-    `Give me a 3-note lick in ${k.name} with frets`, `What's the difference between ${NOTES[k.root]} minor and ${NOTES[k.root]} dorian?`];
+    `Give me a 3-note lick in ${k.name} with frets`, `What's the difference between ${nn(k.root)} minor and ${nn(k.root)} dorian?`];
   $("#ask-ideas").innerHTML = ideas.map((q) => `<button class="ghost idea" data-ask="${esc(q)}">${esc(q)}</button>`).join("");
 }
 const chat = [];

@@ -115,7 +115,7 @@ def _written_chords(tracks, n_bars):
                 continue
             for v in m.get("voices", [])[:1]:
                 for b in v.get("beats", []):
-                    name = (b.get("chord") or {}).get("text", "")
+                    name = (b.get("chord") or {}).get("text", "").replace("♯", "#").replace("♭", "b").strip()
                     if name and not out[i]:
                         out[i] = name
     return out if sum(1 for c in out if c) >= max(3, n_bars // 8) else None
@@ -164,6 +164,15 @@ def _bar_chords(harmony, bass, n_bars):
                 s = sum(w[(r + i) % 12] for i in shape) + w[r] * .5 + bass_w[r] * 1.0 - sum(w) * .15
                 if s > score and w[r] > 0:
                     best, score = NOTES[r] + q, s
+        # no 3rd at all (only root + 5th): a power chord, neither major nor minor
+        if best:
+            r = NOTES.index(best.rstrip("m"))
+            # judge the 3rd from the guitars/keys only: bass lines pass through other notes
+            m3, M3 = (w[(r + k) % 12] - 1.5 * bass_w[(r + k) % 12] for k in (3, 4))
+            no_third = m3 + M3 < 0.12 * w[r]
+            both_thirds = min(m3, M3) > 0.5 * max(m3, M3)  # a chromatic riff using both: still just root + 5th
+            if (no_third or both_thirds) and w[(r + 7) % 12] > 0:
+                best = NOTES[r] + "5"
         out.append(best)
     # a bar without a clear chord keeps the previous one
     for i in range(1, len(out)):
@@ -175,19 +184,56 @@ PROF_MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.
 PROF_MIN = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
 
 
-def _key(tracks_notes):
+KEY_NOTE_WEIGHT = 1.0  # how much the notes count vs the chords when finding the key
+
+
+def _corr(a, b):
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    num = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    den = (sum((x - ma) ** 2 for x in a) * sum((y - mb) ** 2 for y in b)) ** 0.5
+    return num / den if den else 0.0
+
+
+def _parse_chord(c):
+    """'F#m7' -> (6, 'm'), 'B5' -> (11, '5'), 'Eb' -> (3, ''); None if not a chord."""
+    m = re.match(r"([A-G])([#b]?)(.*)", c or "")
+    if not m:
+        return None
+    root = (NOTES.index(m.group(1)) + {"#": 1, "b": -1}.get(m.group(2), 0)) % 12
+    rest = m.group(3)
+    return root, "m" if re.match(r"m(?!aj)", rest) else "5" if rest.startswith("5") else ""
+
+
+def _key(tracks_notes, bars=None, wn=None):
+    """The song's key. Mostly from its chords (which chords fit the key + which one feels like home: the song lingers on,
+    starts and ends with it); the notes' Krumhansl profile breaks ties between keys sharing the same notes."""
     w = [0.0] * 12
     for pcs in tracks_notes:
         for pc, d in pcs:
             w[pc] += d
-    best = max(((r, minor, sum(p * w[(i + r) % 12] for i, p in enumerate(PROF_MIN if minor else PROF_MAJ)))
-                for r in range(12) for minor in (False, True)), key=lambda x: x[2])
+    chords = [(c, b["end"] - b["t"]) for b in bars or [] if (c := _parse_chord(b["chord"]))]
+    total = sum(d for _, d in chords)
+    best = None
+    for r in range(12):
+        for minor in (False, True):
+            prof = PROF_MIN if minor else PROF_MAJ
+            score = (wn if wn is not None else KEY_NOTE_WEIGHT) * _corr([w[(i + r) % 12] for i in range(12)], prof)
+            if len(chords) >= 4 and total:
+                deg = {0: "m", 3: "", 5: "m", 7: "m", 8: "", 10: ""} if minor else {0: "", 2: "m", 4: "m", 5: "", 7: "", 9: "m"}
+                fits = lambda c: (c[0] - r) % 12 in deg and c[1] in ("5", deg[(c[0] - r) % 12])
+                home = lambda c: c[0] == r and c[1] in ("5", "m" if minor else "")
+                fit = sum(d for c, d in chords if fits(c)) / total
+                tonic = sum(d for c, d in chords if home(c)) / total
+                score += fit * 2 + tonic * 1.5 + 0.25 * home(chords[0][0]) + 0.25 * home(chords[-1][0])
+            if best is None or score > best[2]:
+                best = (r, minor, score)
     return {"root": best[0], "minor": best[1], "name": f"{NOTES[best[0]]} {'minor' if best[1] else 'major'}"}
 
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v2-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v7-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -227,8 +273,9 @@ def load(song_id, lead_index=None):
         "beats": _tab_beats(lt, times),
         "tuning_name": tuning_name(tuning),
         "tempo": next((a["bpm"] for a in lt.get("automations", {}).get("tempo", [])), None),
-        "key": _key(pcs),
+        "key": None,
     }
+    out["key"] = _key(pcs)  # notes only: worked-out chords (from riffs) aren't reliable enough to decide the key
     # a major chord that doesn't fit the key but whose minor does (B in B minor, missing its 3rd): use the minor
     k = out["key"]
     scale = {(k["root"] + i) % 12 for i in ((0, 2, 3, 5, 7, 8, 10) if k["minor"] else (0, 2, 4, 5, 7, 9, 11))}
@@ -238,6 +285,7 @@ def load(song_id, lead_index=None):
             r = NOTES.index(m.group(1))
             if (r + 4) % 12 not in scale and (r + 3) % 12 in scale:
                 b["chord"] = m.group(1) + "m"
+    out["_pcs"] = pcs
     # chord names written in the tab beat the ones worked out from the notes
     written = _written_chords([lt] + harmony, len(out["bars"]))
     if written:
@@ -246,5 +294,7 @@ def load(song_id, lead_index=None):
             last = c or last
             b["chord"] = last or b["chord"]
         out["chords_written"] = True
+        out["key"] = _key(pcs, out["bars"])
+    pcs = out.pop("_pcs")
     cache.write_text(json.dumps(out))
     return out

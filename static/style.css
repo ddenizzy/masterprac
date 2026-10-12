@@ -52,22 +52,22 @@ button:hover { filter: brightness(1.1); } button:disabled { opacity: .5; }
 /* ---------- the fretboard (shared) ---------- */
 select { font: 14px var(--font); padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
 .board-wrap { background: linear-gradient(#2a1f17, #1f1712); border: 1px solid var(--line); border-radius: 16px; padding: 4px 8px; flex-shrink: 0; }
-.board { width: 100%; height: 230px; display: block; }
-.board .fret { stroke: #b7a68a; stroke-width: 2; opacity: .55; } .board .fret.twelve { stroke-width: 4; }
+.board { width: 100%; height: 300px; display: block; }
+.board .fret { stroke: #c9b796; stroke-width: 3.5; opacity: .7; } .board .fret.twelve { stroke-width: 6; }
 .board .nut { fill: #e8dcc4; }
-.board .string { stroke: #d9cdb4; opacity: .75; }
-.board .inlay { fill: #c9b99c; opacity: .45; }
-.board .fnum { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
-.board .sname { fill: var(--muted); font: 700 13px var(--font); }
-.board .note text { font: 700 11px var(--font); text-anchor: middle; pointer-events: none; }
-.board .note.scale circle { fill: #3b3430; stroke: #8b7f72; } .board .note.scale text { fill: #e6ddd2; }
+.board .string { stroke: #e6dac0; opacity: .85; }
+.board .inlay { fill: #d6c6a6; opacity: .6; }
+.board .fnum { fill: #cfc5b8; font: 700 14px var(--font); text-anchor: middle; }
+.board .sname { fill: #e6ddd2; font: 800 16px var(--font); }
+.board .note text { font: 800 14px var(--font); text-anchor: middle; pointer-events: none; }
+.board .note.scale circle { fill: #4a413b; stroke: #a89a8a; stroke-width: 1.5; } .board .note.scale text { fill: #fff; }
 .board .note.chord circle { fill: #7ed98b; } .board .note.chord text { fill: #0e2a12; }
 .board .note.root circle { fill: var(--accent); } .board .note.root text { fill: #1a1208; }
 .board .note.hot circle { filter: drop-shadow(0 0 7px rgba(126, 217, 139, .9)); }
 .board .note.root.hot circle { stroke: #7ed98b; stroke-width: 3; }
-.board .note.dim { opacity: .35; }
+.board .note.dim { opacity: .4; }
 .board .note.play circle { fill: #ff6b3d; stroke: #fff; stroke-width: 3; filter: drop-shadow(0 0 10px rgba(255, 107, 61, .95)); }
-.board .note.play text { fill: #fff; font-size: 13px; }
+.board .note.play text { fill: #fff; font-size: 16px; }
 .board .note.next circle { fill: transparent; stroke: #ffd27a; stroke-width: 3; stroke-dasharray: 4 3; }
 .board .note.next text { fill: #ffd27a; }
 .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 5px 0 2px; vertical-align: -1px; }
