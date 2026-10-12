@@ -77,8 +77,11 @@ function render(s) {
   pill.className = "pill " + (sp.running && (sp.volume === 0 || sp.state !== "playing") ? "ok" : "");
   $("#log").innerHTML = s.log.slice().reverse().map((l) => `<li><span>${l.at}</span>${esc(l.text)}</li>`).join("");
 }
+// on battery: half the animation frames and fewer sync checks (still smooth, uses less power)
+const POWER = { battery: false, frames: {} };
+const skipFrame = (who) => POWER.battery && ((POWER.frames[who] = (POWER.frames[who] || 0) + 1) % 2 === 1);  // each loop counts its own frames
 async function refresh() {
-  try { render(await (await fetch("/api/session")).json()); } catch (e) { /* starting */ }
+  try { const s = await (await fetch("/api/session")).json(); POWER.battery = s.plugged === false; render(s); } catch (e) { /* starting */ }
 }
 
 document.addEventListener("click", async (e) => {
@@ -770,7 +773,7 @@ $("#o-autosync").checked = SYNC.on;
 async function syncListen() {
   if (tab !== "play" || !SYNC.on || !usingTab() || !(P.info && P.info.playing) || SYNC.busy) return;
   // every second until it has locked on, then every 2.5 s
-  if (SYNC.state === "locked" && performance.now() - (SYNC.lastAsk || 0) < 2400) return;
+  if (SYNC.state === "locked" && performance.now() - (SYNC.lastAsk || 0) < (POWER.battery ? 4900 : 2400)) return;
   SYNC.lastAsk = performance.now();
   SYNC.busy = true;
   let d;
@@ -1129,7 +1132,7 @@ function fretX(geo, fret) {  // x of a (possibly in-between) fret position
   const xa = geo.xAt(Math.max(0, a)), xb = geo.xAt(Math.max(0, b));
   return xa + (xb - xa) * k;
 }
-function fxFrame() { requestAnimationFrame(fxFrame); fxDraw(); }
+function fxFrame() { requestAnimationFrame(fxFrame); if (!skipFrame("fx")) fxDraw(); }
 // backup timer: screen-refresh callbacks pause when the window isn't visible; draw anyway (~30 fps)
 setInterval(() => { if (performance.now() - (FX.drawnAt || 0) > 60) fxDraw(); }, 33);
 function fxDraw() {
@@ -1417,7 +1420,7 @@ setInterval(() => { const b = $("#pl-playbtn"); if (b) b.innerHTML = P.info && P
 /* smooth tab: the strip slides every screen refresh (60 fps), moved by the GPU; the rest updates 20x a second */
 const tabG = $("#tab-g");
 tabG.style.willChange = "transform";
-function tabScroll() { requestAnimationFrame(tabScroll); tabMove(); }
+function tabScroll() { requestAnimationFrame(tabScroll); if (!skipFrame("tab")) tabMove(); }
 setInterval(() => { if (performance.now() - (P.movedAt || 0) > 80) tabMove(); }, 50);  // backup when screen refreshes pause
 function tabMove() {
   P.movedAt = performance.now();
