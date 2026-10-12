@@ -371,7 +371,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v17-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v18-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -406,9 +406,11 @@ def load(song_id, lead_index=None):
     bass = _json(f"{CDN}/{song_id}/{rev}/{image}/{bass_i}.json") if bass_i is not None else None
     try:
         sync = _json(f"https://www.songsterr.com/api/video-points/{song_id}/{rev}/list")
-        points = next((s["points"] for s in sync if s.get("points")), None)
+        timed = [v for v in sync if v.get("points") and v.get("status") == "done"]
+        first = next((v for v in timed if v.get("feature") != "backing"), timed[0] if timed else None)
+        points = first["points"] if first else None
     except Exception:
-        points = None
+        timed, first, points = [], None, None
     times = _measure_times(lt, points)
     tuning = lt["tuning"]
     pcs = [[((t["tuning"][n["string"]] + n["fret"]) % 12, b["duration"][0] / b["duration"][1])
@@ -425,6 +427,10 @@ def load(song_id, lead_index=None):
         "beats": _tab_beats(lt, times),
         "print": _fingerprint([lt] + harmony + ([bass] if bass else []), times),
         # the words can sit in any part (usually the singer's): singers first, then the rest
+        # the YouTube recordings this tab is timed to (practice mode plays one, so the tab is exactly in sync)
+        "video": first["videoId"] if first else None,
+        "videos": [{"id": v["videoId"], "kind": "backing" if v.get("feature") == "backing" else "song",
+                    "points": [round(x, 3) for x in v["points"]]} for v in timed[:8]],
         "lyrics": _lyrics([get(i) for i in sorted(range(len(tracks)), key=lambda i: not re.search(
             r"vocal|voice|sing", (tracks[i].get("name") or "") + " " + (tracks[i].get("instrument") or ""), re.I))][:6], times),
         "print_step": STEP,

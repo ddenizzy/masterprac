@@ -250,9 +250,25 @@ def sync_now(song_id):
     return jsonify({"result": r, "took": round(time.time() - t0, 2), "error": listen.notes().get("error")})
 
 
+@app.get("/api/search")
+def search():
+    """Songsterr search for practice mode: [{id, title, artist}]."""
+    import requests
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+    try:
+        hits = requests.get(f"{h.SONGSTERR}/api/songs", params={"pattern": q, "size": 12}, timeout=10).json()
+    except Exception:
+        return jsonify([])
+    return jsonify([{"id": x["songId"], "title": x["title"], "artist": x["artist"]} for x in hits if x.get("hasPlayer", True)])
+
+
 @app.get("/api/lyrics")
 def lyrics_now():
     """Timed lyric lines for the playing recording (LRCLIB), for songs whose tab has no lyrics."""
+    if request.args.get("title"):
+        return jsonify({"lines": h.lrclib_lyrics(request.args["title"], request.args.get("artist", ""), 0)})
     p = h.now_playing()
     if not p.get("title"):
         return jsonify({"lines": []})

@@ -275,12 +275,25 @@ function offsetAt(pos) {
   if (Math.abs(b) > 0.05) return P.offset;  // more than 5% speed difference: not drift, something else
   return my + b * (pos - mx);
 }
-const playTime = () => { const pos = playerPos() - ((P.info && P.info.latency) || 0); return pos + offsetAt(pos); };
+const playTime = () => {
+  if (PR.on && PR.ready) return videoToTab(PR.yt.getCurrentTime() - ((P.info && P.info.latency) || 0));  // exact
+  const pos = playerPos() - ((P.info && P.info.latency) || 0); return pos + offsetAt(pos);
+};
+// practice mode: a video's time -> tab time, through that video's own timing points (one per bar)
+const PR = { on: false, ready: false, yt: null, kind: "song", vid: null };
+function videoToTab(t) {
+  const d = P.tab, pts = PR.vid && PR.vid.points;
+  if (!d || !pts || pts.length < 2) return t;
+  let i = 0; while (i < pts.length - 2 && pts[i + 1] <= t) i++;
+  const bar = d.bars[Math.min(i, d.bars.length - 1)], span = Math.max(0.01, pts[i + 1] - pts[i]);
+  return bar.t + ((t - pts[i]) / span) * (bar.end - bar.t);
+}
 
 async function pollNow() {
-  if (tab !== "play") return;
+  if (tab !== "play" || PR.on) return;  // practice mode: the song is the one you picked
   let p;  // eslint-disable-line prefer-const
   try { p = await (await fetch(SYNC.on ? "/api/now?listen=1" : "/api/now")).json(); } catch (e) { return; }
+  if (PR.on) return;  // practice started while this was on its way
   if (!p.title && P.info && P.info.title) p = { ...P.info, playing: false, pos: playerPos(), at: Date.now() / 1000 };  // paused: keep everything
   const changed = !P.info || P.info.title !== p.title || P.info.artist !== p.artist;
   P.info = p;
@@ -1566,3 +1579,93 @@ document.addEventListener("click", (e) => {
 });
 $("#pl-chord").setAttribute("data-chord", ""); $("#pl-chord").title = "Click: how to play this chord";
 setInterval(() => { $("#pl-chord").dataset.chord = P.chord || ""; }, 500);
+
+/* ---------- practice mode ---------- */
+let ytApi = null;
+function loadYouTubeApi() {
+  if (ytApi) return ytApi;
+  ytApi = new Promise((ok) => {
+    window.onYouTubeIframeAPIReady = ok;
+    const sc = document.createElement("script"); sc.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(sc);
+  });
+  return ytApi;
+}
+async function prSearch(q) {
+  $("#pr-list").innerHTML = `<p class="explain">Searching...</p>`;
+  let hits = [];
+  try { hits = await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json(); } catch (e) { /* none */ }
+  prShow(hits);
+}
+async function prShow(hits) {
+  if (!hits) {  // the songs you practise most
+    try { const d = await (await fetch("/api/songs")).json(); hits = [...d.favorites, ...d.practised].map((x) => ({ id: x.id, title: x.title, artist: x.artist })); } catch (e) { hits = []; }
+  }
+  const seen = new Set();
+  $("#pr-list").innerHTML = hits.filter((x) => !seen.has(x.id) && seen.add(x.id)).map((x) => `<div class="ver"><div class="ver-main"><b>${esc(x.title)}</b> <span class="sub">${esc(x.artist)}</span></div>
+    <button data-practice="${x.id}" data-title="${esc(x.title)}" data-artist="${esc(x.artist)}">Practice</button></div>`).join("") || `<p class="explain">Nothing found.</p>`;
+}
+async function startPractice(id, title, artist) {
+  closePops();
+  fetch("/api/player/pause", { method: "POST" }).catch(() => {});  // Spotify pauses, so you don't hear two songs
+  PR.on = true; PR.ready = false; SYNC.on = false;
+  P.info = { title, artist, app: "MasterPrac", playing: false, pos: 0, at: Date.now() / 1000, duration: 0, latency: P.info ? P.info.latency : 0, match: { id } };
+  $("#pl-app").textContent = "PRACTICE MODE"; $("#pl-title").textContent = title; $("#pl-artist").textContent = artist;
+  P.songId = id; P.offset = 0;
+  document.body.classList.add("practice"); $("#practice-bar").classList.remove("hidden");
+  await loadTab(id, null);
+  const d = P.tab;
+  if (!d || d.error || !(d.videos || []).length) { toast("This tab has no recording to practise with"); stopPractice(); return; }
+  $("#pk-backing").classList.toggle("hidden", !d.videos.some((v) => v.kind === "backing"));
+  fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`).then((r) => r.json())
+    .then((l) => { if (PR.on && P.songId === id && !(d.lyrics && d.lyrics.length) && l.lines) { P.lrc = l.lines; drawTab(); } }).catch(() => {});
+  playVideo(PR.kind);
+}
+async function playVideo(kind, skip = 0) {
+  const d = P.tab, list = d.videos.filter((v) => v.kind === kind);
+  const v = list[skip] || d.videos.filter((x) => x.kind === "song")[0];
+  if (!v) return;
+  PR.vid = v; PR.kind = v.kind; PR.ready = false;
+  document.querySelectorAll("[data-pkind]").forEach((b) => b.classList.toggle("on", b.dataset.pkind === v.kind));
+  await loadYouTubeApi();
+  const at = PR.yt && PR.ready ? PR.yt.getCurrentTime() : 0;
+  if (PR.yt) { PR.yt.destroy(); PR.yt = null; }
+  $("#yt-box").innerHTML = `<div id="yt"></div>`;
+  PR.yt = new YT.Player("yt", { videoId: v.id, width: 240, height: 135, host: "https://www.youtube-nocookie.com",
+    playerVars: { autoplay: 1, controls: 1, modestbranding: 1, rel: 0, start: Math.floor(at), playsinline: 1, origin: location.origin },
+    events: {
+      onReady: () => { PR.ready = true; if (window.TEST_MUTE) PR.yt.mute(); PR.yt.setPlaybackRate(PR.speed || 1); PR.yt.playVideo(); },
+      onStateChange: (e) => { if (P.info) P.info.playing = e.data === 1; },
+      onError: () => { PR.ready = false; if (skip + 1 < list.length) playVideo(kind, skip + 1); else toast("YouTube won't play this one here: try the other track"); },
+    } });
+}
+function stopPractice() {
+  PR.on = false; PR.ready = false; SYNC.on = $("#o-autosync").checked;
+  if (PR.yt) { PR.yt.destroy(); PR.yt = null; }
+  document.body.classList.remove("practice"); $("#practice-bar").classList.add("hidden");
+  P.info = null; P.songId = null; pollNow();
+}
+$("#pr-form").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#pr-q").value.trim(); if (q) prSearch(q); });
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "pl-practice") { openPop("#pop-practice"); prShow(null); setTimeout(() => $("#pr-q").focus(), 50); }
+  if (b.dataset.practice) startPractice(Number(b.dataset.practice), b.dataset.title, b.dataset.artist);
+  if (b.id === "practice-exit") stopPractice();
+  if (b.dataset.pkind && PR.on) playVideo(b.dataset.pkind);
+  if (b.dataset.speed && PR.on) {
+    PR.speed = Number(b.dataset.speed); if (PR.yt && PR.ready) PR.yt.setPlaybackRate(PR.speed);
+    document.querySelectorAll("[data-speed]").forEach((x) => x.classList.toggle("on", x === b));
+  }
+}, true);
+// the play button controls the video in practice mode (instead of Spotify)
+$("#pl-playbtn").addEventListener("click", (e) => {
+  if (!PR.on || !PR.yt || !PR.ready) return;
+  e.stopImmediatePropagation();
+  if (PR.yt.getPlayerState() === 1) PR.yt.pauseVideo(); else PR.yt.playVideo();
+}, true);
+// the time bar in practice mode
+setInterval(() => {
+  if (!PR.on || !PR.yt || !PR.ready) return;
+  const t = PR.yt.getCurrentTime(), dur = PR.yt.getDuration() || 0;
+  P.info.pos = t; P.info.at = Date.now() / 1000; P.info.duration = dur;
+}, 250);

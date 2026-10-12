@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>MasterPrac</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -53,6 +54,7 @@
       </div>
       <div class="pl-actions">
         <span class="out-icon" id="pl-out" title="Where the sound plays now"></span>
+        <button class="ghost" id="pl-practice" title="Pick a song: MasterPrac plays it itself, exactly in sync with the tab">Practice a song</button>
         <button class="ghost" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button>
         <button class="ghost" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
         <details class="dd more"><summary>More</summary><div class="dd-menu right">
@@ -63,6 +65,14 @@
       </div>
     </div>
 
+    <div class="practice-bar hidden" id="practice-bar">
+      <span class="kicker">PRACTICE MODE</span>
+      <div class="seg"><button class="seg-b on" data-pkind="song">Original song</button><button class="seg-b" data-pkind="backing" id="pk-backing">Backing track (no guitar)</button></div>
+      <div class="seg"><button class="seg-b" data-speed="0.5">50%</button><button class="seg-b" data-speed="0.75">75%</button><button class="seg-b on" data-speed="1">100%</button></div>
+      <span class="sub" id="practice-note">Exactly in sync: the tab follows the video's own clock.</span>
+      <button class="ghost" id="practice-exit">Leave practice</button>
+      <div class="yt-box" id="yt-box"><div id="yt"></div></div>
+    </div>
     <div class="pl-now">
       <div class="np-box big"><span class="kicker">CHORD NOW</span><b id="pl-chord">-</b></div>
       <div class="np-box"><span class="kicker">NEXT</span><b id="pl-next">-</b><span class="sub" id="pl-in"></span></div>
@@ -172,6 +182,12 @@
     <p class="explain" id="ver-intro">Songsterr often has several tabs of the same song. Pick the one whose guitars and length match your recording.</p>
     <div class="ver-list" id="ver-list"></div>
     <form class="ver-paste" id="ver-paste"><input id="ver-url" placeholder="Or paste any Songsterr tab link..." autocomplete="off"><button type="submit">Use this link</button></form>
+  </div></div>
+  <div class="pop hidden" id="pop-practice"><div class="pop-card wide">
+    <div class="pop-head"><b>Practice a song</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <p class="explain">MasterPrac plays the recording Songsterr's tab is timed to (or a backing track without the guitar), so everything is exactly in sync. Spotify pauses.</p>
+    <form class="ver-paste" id="pr-form"><input id="pr-q" placeholder="Search a song or artist..." autocomplete="off"><button type="submit">Search</button></form>
+    <div class="ver-list" id="pr-list"></div>
   </div></div>
   <div class="pop hidden" id="pop-chord"><div class="pop-card cd-pop">
     <div class="pop-head"><b id="cd-title">Chord</b><button class="ghost icon" data-close>&#10005;</button></div>

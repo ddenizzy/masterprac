@@ -587,3 +587,10 @@ body.neon .sh-c { color: #39ff88; }
 .cd .cd-o { fill: none; stroke: var(--text); stroke-width: 1.4; } .cd .cd-x { fill: var(--muted); font: 700 10px var(--font); text-anchor: middle; }
 .cd-pop { width: min(360px, 92vw); justify-items: center; text-align: center; }
 #pl-chord { cursor: pointer; }
+
+/* practice mode */
+.practice-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.practice-bar .seg-b { padding: 5px 12px; font-size: 13px; }
+.yt-box { margin-left: auto; width: 240px; height: 135px; border-radius: 10px; overflow: hidden; background: #000; }
+body.practice #tab-sync { display: none; }
