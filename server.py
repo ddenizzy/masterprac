@@ -122,17 +122,49 @@ def ask():
 
 
 # ---------- NOW PLAYING: whatever plays on the Mac, in any app ----------
-_matches = {}  # "title|artist" -> Songsterr match (or None), looked up once
+_matches = {}  # "title|artist" -> the best Songsterr version (or None), looked up once
+_match_lock = threading.Lock()
+
+
+def best_version(title, artist):
+    """Of all Songsterr versions of the song, the most complete one: most bars with guitar, synced to the recording."""
+    import tabs
+    found = h.songsterr_matches(title, artist)[:4]
+    if len(found) <= 1:
+        return found[0] if found else None
+
+    def coverage(m):
+        try:
+            d = tabs.load(m["id"])
+        except Exception:
+            return 0
+        return max((t.get("played") or 0 for t in d["tracks"]), default=0) / max(1, len(d["bars"]))
+    # Songsterr's top result is usually the best-made, most-viewed tab: keep it unless it's unfinished
+    if coverage(found[0]) >= 0.5:
+        return found[0]
+
+    def score(m):
+        try:
+            d = tabs.load(m["id"])
+        except Exception:
+            return -1
+        most = max((t.get("played") or 0 for t in d["tracks"]), default=0)
+        return most / max(1, len(d["bars"])) + (0.3 if d["synced"] else 0) + 0.05 * len(d["tracks"])
+    best = max(found, key=score)
+    if best is not found[0]:
+        log(f"Using the most complete Songsterr tab of \"{title}\" (by {best['artist']} on Songsterr).")
+    return best
 
 
 @app.get("/api/now")
 def now():
-    """What's playing in any app + its Songsterr version (if Songsterr has that exact song)."""
+    """What's playing in any app + its Songsterr version (the most complete one, if Songsterr has that song)."""
     p = h.now_playing()
     if p.get("title"):
         k = f"{p['title']}|{p['artist']}".lower()
-        if k not in _matches:
-            _matches[k] = h.songsterr_match(p["title"], p["artist"])
+        with _match_lock:  # the page asks every second: look it up once
+            if k not in _matches:
+                _matches[k] = best_version(p["title"], p["artist"])
         p["match"] = _matches[k]
     return jsonify(p)
 

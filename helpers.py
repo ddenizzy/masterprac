@@ -241,19 +241,33 @@ def now_playing():
 
 def songsterr_match(title, artist):
     """Songsterr's version of a song only if it really is that song (titles must match; artists too if known)."""
+    found = songsterr_matches(title, artist)
+    return found[0] if found else None
+
+
+def _same_artist(a, b):
+    """'Jackson Browne' vs 'Jackson Brownie' (typos in uploads), 'The Beatles' vs 'Beatles'."""
+    import difflib
+    a, b = a.replace("the", ""), b.replace("the", "")
+    return a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
+
+
+def songsterr_matches(title, artist):
+    """Every Songsterr version of this exact song (there are often several, some unfinished), best match first."""
     if not title:
-        return None
+        return []
     try:
-        hits = requests.get(f"{SONGSTERR}/api/songs", params={"pattern": f"{artist} {title}".strip(), "size": 10}, timeout=10).json()
+        hits = requests.get(f"{SONGSTERR}/api/songs", params={"pattern": f"{artist} {title}".strip(), "size": 20}, timeout=10).json()
     except (requests.RequestException, ValueError):
-        return None
+        return []
     t, a = _norm(re.sub(r"\(.*?\)", "", title)), _norm(artist)
+    out = []
     for hit in hits or []:
         ht, ha = _norm(re.sub(r"\(.*?\)", "", hit["title"])), _norm(hit["artist"])
         if not a:  # no artist known (a video, a show...): only the exact same title counts
             close = _norm(hit["title"]) == _norm(title)
         else:
             close = ht == t or (len(t) > 4 and (ht.startswith(t) or t.startswith(ht)))
-        if ht and close and (not a or a in ha or ha in a or ha.replace("the", "") == a.replace("the", "")):
-            return {"id": hit["songId"], "title": hit["title"], "artist": hit["artist"], "url": songsterr_url(hit)}
-    return None
+        if ht and close and (not a or _same_artist(a, ha)) and hit.get("hasPlayer", True):
+            out.append({"id": hit["songId"], "title": hit["title"], "artist": hit["artist"], "url": songsterr_url(hit)})
+    return out

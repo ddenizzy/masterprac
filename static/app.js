@@ -410,7 +410,8 @@ function headsUp(extra) {
     const bi = Math.max(0, P.barIdx);
     if (JSON.stringify(d.tuning) !== JSON.stringify(STD)) out.push(`<b>Tuning: ${esc(d.tuning_name)}</b>: tune your guitar to this first.`);
     const most = tabIncomplete();
-    if (most !== false) out.push(`<b>Unfinished tab:</b> Songsterr only has guitar written for ${most} of ${d.bars.length} bars. Chords still work; for the rest try Options → by ear.`);
+    if (most !== false) out.push(`<b>Unfinished tab:</b> Songsterr only has guitar written for ${most} of ${d.bars.length} bars (no better version there). Chords still work.
+      <button class="ghost mini" data-othertabs>Look on Ultimate Guitar</button>`);
     const nextSec = d.bars.slice(bi + 1).findIndex((b) => b.section);
     if (nextSec >= 0 && nextSec < 4) out.push(`<b>${esc(d.bars[bi + 1 + nextSec].section)}</b> ${nextSec === 0 ? "starts next bar" : `in ${nextSec + 1} bars`}.`);
     const soon = d.beats.filter((b) => b[2] >= bi && b[2] <= bi + 2);
@@ -520,6 +521,10 @@ document.addEventListener("click", (e) => {
   if (b.dataset.nudge && P.songId) {
     P.offset = Math.round((P.offset + Number(b.dataset.nudge)) * 100) / 100;
     localStorage.setItem("pl-offset-" + P.songId, P.offset); showOffset();
+  }
+  if (b.dataset.othertabs !== undefined && api() && P.info) {  // other tab sites, inside the built-in browser
+    api().browser_go(`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(`${P.info.artist} ${P.info.title}`.trim())}`);
+    setTab("songsterr");
   }
   if (b.id === "pl-open" && api() && P.info && P.info.title) {
     if (P.info.match) api().browser_go(P.info.match.url); else api().browser_search(`${P.info.artist} ${P.info.title}`.trim());
