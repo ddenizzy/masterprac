@@ -539,12 +539,27 @@ function drawTab() {
       for (let k = 1; k <= n; k++) h += `<text class="tlyric dash" x="${(end + (gap * k) / (n + 1) - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
     } else if (syl.endsWith("-") && gap > cw * 1.4) h += `<text class="tlyric dash" x="${(end + gap / 2 - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
   });
-  // timed lines from LRCLIB (no words in the tab): recording time + the sync shift
-  P.lrcDrawnAt = P.offset;
+  // timed lines from LRCLIB (no words in the tab): they only know when each LINE starts. So each line is spread over
+  // the time it's sung (up to the next line), every word given time by its syllables: the words pass the playhead
+  // about when they're sung instead of the whole line flying by. Times = recording time + the sync shift.
+  P.lrcDrawnAt = P.offset; P.lrcWords = [];
   const lrc = TSHOW.lyrics && !P.lyDrawn.length ? P.lrc || [] : [];
+  const sylls = (w) => Math.max(1, (w.match(/[aeiouyâêîôûäöüıàéèíóúAEIOUYÂÊÎÔÛÄÖÜİÀÉÈÍÓÚ]+/g) || []).length);
   lrc.forEach(([t, line], i) => {
-    const x = (t + P.offset) * PX + 6, nx = lrc[i + 1] ? (lrc[i + 1][0] + P.offset) * PX + 6 : Infinity;
-    h += `<text class="tlyric first" id="lr${i}" x="${x.toFixed(1)}" y="${ly0}"${fit(x, line, nx - x - cw * 2)}>${esc(line)}</text>`;
+    const words = line.split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const t0 = t + P.offset, next = lrc[i + 1] ? lrc[i + 1][0] + P.offset : t0 + 8;
+    const total = words.reduce((a, w) => a + sylls(w), 0);
+    const dur = Math.max(0.6, Math.min(next - t0 - 0.35, total * 0.42 + 0.6));  // a line rarely takes longer than ~0.4 s a syllable
+    let acc = 0;
+    words.forEach((w, k) => {
+      const wt = t0 + (dur * acc) / total, wx = wt * PX + 6;
+      acc += sylls(w);
+      const nt = k + 1 < words.length ? t0 + (dur * acc) / total : Infinity, room = nt * PX + 6 - wx - cw * 0.5;
+      const id = `lr${i}w${k}`;
+      h += `<text class="tlyric ${k ? "" : "first"}" id="${id}" x="${wx.toFixed(1)}" y="${ly0}"${fit(wx, w, room)}>${esc(w)}</text>`;
+      P.lrcWords.push([wt, id]);
+    });
   });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
@@ -597,8 +612,8 @@ function playTick() {
   }
   if (P.lrc && P.lrc.length && !(P.lyDrawn && P.lyDrawn.length)) {
     if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
-    const li = lastAt(P.lrc, t - P.offset, (x) => x[0]);
-    if (li !== P.lrIdx) { document.getElementById("lr" + P.lrIdx)?.classList.remove("on"); document.getElementById("lr" + li)?.classList.add("on"); P.lrIdx = li; }
+    const wi = lastAt(P.lrcWords || [], t, (x) => x[0]), id = wi >= 0 ? P.lrcWords[wi][1] : "";
+    if (id !== P.lrIdx) { if (P.lrIdx) document.getElementById(P.lrIdx)?.classList.remove("on"); if (id) document.getElementById(id)?.classList.add("on"); P.lrIdx = id; }
   }
   if (P.lyDrawn && P.lyDrawn.length) {  // light up the syllable being sung
     const li = lastAt(P.lyDrawn, t, (x) => x[0]);
