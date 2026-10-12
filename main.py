@@ -361,6 +361,7 @@ def main():
 
     def on_start():
         AppHelper.callAfter(lambda: NSApp.activateIgnoringOtherApps_(True))  # open in front
+        AppHelper.callLater(1.0, lambda: api.fullscreen(True))  # and in macOS full screen
         threading.Thread(target=start_session, args=(api,), daemon=True).start()
         AppHelper.callLater(2.0, watch_browser, api._browser)
 
