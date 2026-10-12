@@ -203,7 +203,7 @@ function fretboard(svg, o) {
 /* ======================= PLAY (any app's song: scrolling tab, chords, fretboard) ======================= */
 // What plays on the Mac (macOS "Now Playing": Spotify, YouTube in a browser, Music...) -> its Songsterr tab, pulled
 // in the background -> the tab scrolls with the music, the chord of the bar playing now, what's coming.
-// No tab (or "by ear"): the chords are worked out from the sound (Custamo's listener), slowly and steadily.
+// No tab (or "by ear"): the chords are worked out from the sound (MasterPrac's own ears), slowly and steadily.
 const P = { info: null, tab: null, songId: null, track: null, mode: "jam", src: "tab", offset: 0, key: null, chord: "",
   barIdx: -1, beatIdx: -1, sig: "", PX: 150, nowNotes: [], nextNotes: [],
   ear: { smooth: Array(12).fill(0), acc: Array(12).fill(0), chord: null, cand: null, since: 0, keyCand: null, keySince: 0 } };
@@ -237,7 +237,7 @@ async function pollNow() {
     if (id) {
       const saved = localStorage.getItem("pl-track-" + id);
       await loadTab(id, saved === null ? null : Number(saved));
-    } else { tabEmpty(p.title ? "Songsterr doesn't have this exact song: the chords are worked out by ear (needs Custamo open)." : "The song's tab scrolls here while it plays."); }
+    } else { tabEmpty(p.title ? "Songsterr doesn't have this exact song: MasterPrac listens and works the chords out by ear." : "The song's tab scrolls here while it plays."); }
   }
   headsUp();
 }
@@ -465,7 +465,12 @@ async function playEar() {
   if (tab !== "play" || usingTab() || !(P.info && P.info.title)) return;
   let d;
   try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
-  if (!d.live || d.rms < 0.004) { $("#pl-section").textContent = d.error ? "Can't hear" : "Silent"; $("#pl-barno").textContent = d.error ? "open Custamo" : ""; return; }
+  if (!d.live || d.rms < 0.004) {
+    $("#pl-section").textContent = d.error ? "Can't hear" : "Silent"; $("#pl-barno").textContent = d.error ? "see Heads up" : "";
+    if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); }
+    return;
+  }
+  if (P.earError) { P.earError = null; headsUp(); }
   $("#pl-section").textContent = "by ear"; $("#pl-barno").textContent = ""; $("#pl-next").textContent = "?"; $("#pl-in").textContent = "";
   const e = P.ear, kk = Math.exp(-0.12 / 1.2), now = performance.now() / 1000;
   e.smooth = e.smooth.map((v, i) => v * kk + d.chroma[i] * (1 - kk));
@@ -489,7 +494,7 @@ document.addEventListener("click", (e) => { const b = e.target.closest("[data-pa
 $("#o-src").addEventListener("change", (e) => {
   P.src = e.target.value; P.sig = ""; P.barIdx = -1; P.ear.chord = null;
   if (usingTab()) { P.key = { root: P.tab.key.root, minor: P.tab.key.minor }; drawTab(); }
-  else tabEmpty("Chords by ear: MasterPrac listens to the music (needs Custamo open).");
+  else tabEmpty("Chords by ear: MasterPrac listens to the music and works out the chords.");
   headsUp();
 });
 document.addEventListener("click", (e) => {

@@ -25,6 +25,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
   <key>NSBluetoothAlwaysUsageDescription</key><string>MasterPrac moves your Mac's sound to your HeadRush amp while you practise, and back to your speakers when you close it.</string>
   <key>NSAppleEventsUsageDescription</key><string>MasterPrac mutes Spotify while you practise (it keeps playing so your minutes count) and turns it back up when you close it.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>MasterPrac listens to the music your Mac plays to work out its chords ("Chords by ear"). Nothing is recorded or saved.</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
@@ -34,6 +35,9 @@ PYHOME="$("$ROOT/.venv/bin/python" -c 'import sys; print(sys.base_prefix)')"
 SITE="$("$ROOT/.venv/bin/python" -c 'import site; print(site.getsitepackages()[0])')"
 clang -O2 -DPYTHON_HOME="\"$PYHOME\"" -DAPP_ROOT="\"$ROOT\"" -DSITE_DIR="\"$SITE\"" \
   "$ROOT/launcher/masterprac.c" -o "$APP/Contents/MacOS/MasterPrac"
+
+# its own ears: hears the Mac's sound (audio only) for "Chords by ear"
+swiftc -O "$ROOT/tools/audiotap.swift" -o "$APP/Contents/MacOS/audiotap"
 
 # sign with the same self-made certificate as Custamo, so macOS remembers MasterPrac's permissions across rebuilds
 IDENTITY="-"

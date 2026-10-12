@@ -149,12 +149,9 @@ def now_tab(song_id):
 
 @app.get("/api/live")
 def live():
-    """12 note strengths + beat, from Custamo's listener (it already has the Mac's audio permission)."""
-    import requests
-    try:
-        return jsonify(requests.get("http://127.0.0.1:5050/api/listen", timeout=1.5).json())
-    except Exception:
-        return jsonify({"live": False, "error": "Custamo isn't running, so MasterPrac can't hear the music."})
+    """12 note strengths + beat from MasterPrac's own ears (only while the page keeps asking)."""
+    import listen
+    return jsonify(listen.listen())
 
 
 # ---------- my songs: practice time per song + favourites ----------
