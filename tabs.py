@@ -233,23 +233,37 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v7-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v9-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
     rev, image, tracks = meta["revisionId"], meta["image"], meta["tracks"]
-    lead = lead_index if lead_index is not None else _pick(tracks, ("lead", "solo"))
-    if lead is None:
-        lead = meta.get("popularTrackGuitar") if meta.get("popularTrackGuitar") is not None else meta.get("defaultTrack", 0)
+    # how many bars each guitar part actually plays (a lead part can be silent most of the song)
+    guitars = [i for i, t in enumerate(tracks) if "guitar" in (t.get("instrument") or "").lower()]
+    played, loaded, active = {}, {}, {}
+    for i in guitars[:8]:
+        try:
+            loaded[i] = _json(f"{CDN}/{song_id}/{rev}/{image}/{i}.json")
+            active[i] = "".join("1" if any("fret" in n and not n.get("rest") for v in m.get("voices", [])[:1]
+                                           for b in v.get("beats", []) for n in b.get("notes", [])) else "0"
+                                for m in loaded[i]["measures"])  # which bars this part plays
+            played[i] = active[i].count("1")
+        except Exception:
+            played[i] = 0
+    # the part to follow: the one asked for, else the guitar that plays the most (ties: Songsterr's most popular)
+    pop = meta.get("popularTrackGuitar")
+    lead = lead_index if lead_index is not None else (
+        max(played, key=lambda i: (played[i], i == pop)) if played else pop if pop is not None else meta.get("defaultTrack", 0))
     rhythm = _pick(tracks, ("rhythm", "chord", "acoustic", "guitar"), avoid=("lead", "solo"))
     if rhythm is None or rhythm == lead:
         rhythm = lead
-    lt = _json(f"{CDN}/{song_id}/{rev}/{image}/{lead}.json")
-    rt = lt if rhythm == lead else _json(f"{CDN}/{song_id}/{rev}/{image}/{rhythm}.json")
+    get = lambda i: loaded[i] if i in loaded else _json(f"{CDN}/{song_id}/{rev}/{image}/{i}.json")
+    lt = get(lead)
+    rt = lt if rhythm == lead else get(rhythm)
     # accompaniment for chords: every other guitar/keys track (up to 4) + the bass
     others = [i for i, t in enumerate(tracks) if i not in (lead, rhythm) and re.search(
         r"guitar|piano|organ|keys", (t.get("instrument") or "") + (t.get("name") or ""), re.I)][:3]
-    harmony = [rt] + [_json(f"{CDN}/{song_id}/{rev}/{image}/{i}.json") for i in others]
+    harmony = [rt] + [get(i) for i in others]
     bass_i = next((i for i, t in enumerate(tracks) if "bass" in (t.get("instrument") or "").lower()), None)
     bass = _json(f"{CDN}/{song_id}/{rev}/{image}/{bass_i}.json") if bass_i is not None else None
     try:
@@ -265,8 +279,8 @@ def load(song_id, lead_index=None):
     out = {
         "song_id": song_id, "lead": lead, "rhythm": rhythm, "synced": bool(points),
         "lead_name": lt.get("name", ""), "rhythm_name": rt.get("name", ""), "tuning": tuning,
-        "tracks": [{"i": i, "name": t.get("name", ""), "instrument": t.get("instrument", "")} for i, t in enumerate(tracks)
-                   if "guitar" in (t.get("instrument") or "").lower()],
+        "tracks": [{"i": i, "name": t.get("name", ""), "instrument": t.get("instrument", ""), "played": played.get(i), "active": active.get(i, "")}
+                   for i, t in enumerate(tracks) if "guitar" in (t.get("instrument") or "").lower()],
         "bars": [{"t": round(s, 3), "end": round(e, 3), "section": (m.get("marker") or {}).get("text", ""), "chord": c}
                  for (s, e), m, c in zip(times, lt["measures"], _bar_chords(harmony, bass, len(lt["measures"])))],
         "events": _events(lt, times),

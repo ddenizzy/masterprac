@@ -252,8 +252,31 @@ async function loadTab(id, track) {
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
-  $("#o-track").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(t.name.split("|").map((x) => x.trim()).filter(Boolean).join(" · ") || t.instrument)}</option>`).join("");
+  $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
+  $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
   drawTab(); buildMap(); headsUp(); drawPlayBoard();
+}
+
+// "Thom Yorke | Takamine EN10C | Rhythm Guitar" -> "Thom Yorke · Rhythm Guitar"
+function partName(t) {
+  const bits = (t.name || "").split("|").map((x) => x.trim()).filter(Boolean);
+  return (bits.length >= 3 ? [bits[0], bits[bits.length - 1]] : bits).join(" · ") || t.instrument || "Guitar";
+}
+// is the followed part silent around bar bi? then say so, and offer the guitar that IS playing
+function restNote(bi) {
+  const d = P.tab, me = d.tracks.find((t) => t.i === d.lead), box = $("#tab-rest");
+  if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); return; }
+  let n = 0; while (bi + n < me.active.length && me.active[bi + n] !== "1") n++;
+  const other = d.tracks.find((t) => t.i !== d.lead && t.active && t.active[bi] === "1");
+  const left = bi + n >= me.active.length;
+  box.innerHTML = `${left ? "This part is done for the song." : `This part rests here for ${n} bar${n > 1 ? "s" : ""}.`}
+    ${other ? `<button class="ghost" data-part="${other.i}">Follow ${esc(partName(other))} instead</button>` : ""}`;
+  box.classList.remove("hidden");
+}
+function setPart(i) {
+  if (!P.songId) return;
+  localStorage.setItem("pl-track-" + P.songId, i);
+  loadTab(P.songId, Number(i));
 }
 
 function tabEmpty(msg) {
@@ -354,6 +377,7 @@ function playTick() {
     $("#pl-next").textContent = nextBar ? spell(nextBar.chord) : "-";
     document.querySelectorAll("#pl-map .ch").forEach((el) => el.classList.toggle("now", bi >= +el.dataset.from && bi <= +el.dataset.to));
     setChord(bar.chord || "", nextBar ? nextBar.chord : "");
+    restNote(bi);
     headsUp();
   } else drawPlayBoard();
 }
@@ -384,11 +408,6 @@ function headsUp(extra) {
     const tech = new Set();
     soon.forEach(([, , , notes, bf]) => { notes.forEach((n) => [...n[2]].forEach((c) => TECH[c] && c !== "t" && tech.add(TECH[c]))); bf.split(" ").forEach((f) => TECH[f] && tech.add(TECH[f])); });
     if (tech.size) out.push(`Coming up: ${[...tech].join(", ")}.`);
-    if (P.mode === "learn") {
-      const restUntil = d.bars.slice(bi).findIndex((_, j) => d.beats.some((b) => b[2] === bi + j && b[3].length));
-      if (restUntil > 1) out.push(`Your part rests for ${restUntil} bars.`);
-      if (restUntil === -1) out.push("Your part is done for this song.");
-    }
     const note = d.beats.find((b) => b[5] && b[2] >= bi - 1 && b[2] <= bi + 2);
     if (note) out.push(`Tab note: "${esc(note[5].slice(0, 140))}${note[5].length > 140 ? "..." : ""}"`);
   } else if (P.info && P.info.title) out.push(P.src === "ear" || !P.info.match ? "Chords by ear: a change shows after about a bar." : "Pulling the tab from Songsterr...");
@@ -465,11 +484,8 @@ function showOffset() { $("#o-off").textContent = `${P.offset >= 0 ? "+" : ""}${
 function scaleHelp() { $("#o-scale-help").textContent = SCALE_HELP[$("#o-scale").value]; }
 scaleHelp();
 ["o-scale", "o-labels", "o-area"].forEach((id) => $("#" + id).addEventListener("change", () => { scaleHelp(); drawPlayBoard(); }));
-$("#o-track").addEventListener("change", (e) => {
-  if (!P.songId) return;
-  localStorage.setItem("pl-track-" + P.songId, e.target.value);
-  loadTab(P.songId, Number(e.target.value));
-});
+$("#tab-part").addEventListener("change", (e) => setPart(e.target.value));
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-part]"); if (b) setPart(b.dataset.part); });
 $("#o-src").addEventListener("change", (e) => {
   P.src = e.target.value; P.sig = ""; P.barIdx = -1; P.ear.chord = null;
   if (usingTab()) { P.key = { root: P.tab.key.root, minor: P.tab.key.minor }; drawTab(); }
