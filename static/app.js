@@ -7,7 +7,7 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // the app's bridge; usable only once its functions are attached (a moment after the page loads)
 const api = () => { const a = window.pywebview && window.pywebview.api; return a && typeof a.browser_place === "function" ? a : null; };
-let tab = "songsterr";
+let tab = "play";
 
 // every dropdown in the app as pill buttons: the <select> stays (hidden) and keeps working; clicks set it
 function pillify(sel) {
@@ -48,7 +48,9 @@ function setTab(name) {
   tab = name;
   try { sessionStorage.setItem("mp-tab", name); } catch (e) { /* fine */ }
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.id !== `view-${name}`));
+  const isWin = !!document.querySelector(`#view-${name}.win`);
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", !(v.id === `view-${name}` || (isWin && v.id === "view-play"))));
+  document.body.classList.toggle("win-open", isWin);
   closePops();
   placeBrowser();
   if (name === "play") { pollNow(); drawPlayBoard(); }
@@ -301,40 +303,68 @@ async function pollNow() {
 }
 setInterval(pollNow, 1000);
 
-async function loadTab(id, track) {
-  tabEmpty("Pulling the tab from Songsterr...");
+// tabs are kept in memory per song + guitar part, so switching guitars is instant (and keeps the sync)
+const TABS = new Map();
+async function fetchTab(id, track) {
+  const k = `${id}:${track ?? "auto"}`;
+  if (TABS.has(k)) return TABS.get(k);
   let d;
   try { d = await (await fetch(`/api/now/tab/${id}` + (track !== null && track !== undefined ? `?lead=${track}` : ""))).json(); }
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
+  if (!d.error) { TABS.set(k, d); TABS.set(`${id}:${d.lead}`, d); }
+  if (TABS.size > 12) TABS.delete(TABS.keys().next().value);  // a few songs' worth, not more (memory)
+  return d;
+}
+const isAcoustic = (t) => /acoustic|nylon|steel/i.test(`${t.instrument} ${t.name}`);
+async function loadTab(id, track, keepSync) {
+  if (!keepSync) tabEmpty("Pulling the tab from Songsterr...");
+  let d = await fetchTab(id, track);
   if (P.songId !== id) return;  // the song changed meanwhile
-  P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
-  SYNC.recent = []; SYNC.shifts = []; SYNC.points = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
-  if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
-  P.key = { root: d.key.root, minor: d.key.minor };
-  $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
-  $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
-  // one big button per guitar part (the one you follow filled in); many parts scroll sideways
-  $("#tab-part").classList.add("hidden");
-  $("#part-btns").classList.toggle("many", d.tracks.length > 4);
-  $("#part-btns").innerHTML = d.tracks.map((t) => `<button class="part-b ${t.i === d.lead ? "on" : ""}" data-part="${t.i}"
-    title="${esc(t.name)}">${esc(partName(t))}${t.played != null ? `<i>${t.played}/${d.bars.length}</i>` : ""}</button>`).join("");
-  P.lrc = []; P.lyBarIdx = undefined;
-  drawTab(); buildMap(); headsUp(); drawPlayBoard();
-  if (!(d.lyrics && d.lyrics.length)) {  // no words in the tab: timed lines for the recording itself (LRCLIB)
-    try {
-      const l = await (await fetch("/api/lyrics")).json();
-      if (P.songId === id && l.lines && l.lines.length) { P.lrc = l.lines; drawTab(); }
-    } catch (e) { /* no lyrics */ }
+  // no part chosen yet: the preferred kind (electric / acoustic), if that part plays a good share of the song
+  const pref = $("#o-prefer").value;
+  if ((track === null || track === undefined) && !d.error && pref !== "any") {
+    const most = Math.max(...d.tracks.map((t) => t.played || 0));
+    const want = d.tracks.filter((t) => (pref === "acoustic") === isAcoustic(t) && (t.played || 0) >= most * 0.5).sort((a, b) => b.played - a.played)[0];
+    if (want && want.i !== d.lead) { d = await fetchTab(id, want.i); if (P.songId !== id) return; }
+  }
+  applyTab(d, keepSync);
+  // get the next most-played guitar ready in the background (instant switch / auto-switch)
+  if (!d.error) {
+    const other = d.tracks.filter((t) => t.i !== d.lead).sort((a, b) => (b.played || 0) - (a.played || 0))[0];
+    if (other) setTimeout(() => fetchTab(id, other.i), 1500);
   }
 }
-
+function applyTab(d, keepSync) {
+  const id = P.songId;
+  P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
+  if (!keepSync) { SYNC.recent = []; SYNC.shifts = []; SYNC.points = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = ""; }
+  if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
+  P.key = { root: d.key.root, minor: d.key.minor };
+  $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
+  $("#tab-part").classList.add("hidden");
+  partButtons();
+  if (!keepSync) { P.lrc = []; P.lyBarIdx = undefined; }
+  drawTab(); buildMap(); headsUp(); drawPlayBoard();
+  if (!keepSync && !(d.lyrics && d.lyrics.length)) {  // no words in the tab: timed lines for the recording itself (LRCLIB)
+    fetch("/api/lyrics").then((r) => r.json()).then((l) => { if (P.songId === id && l.lines && l.lines.length) { P.lrc = l.lines; drawTab(); } }).catch(() => {});
+  }
+}
+// one button per guitar part: who plays it, electric or acoustic, how much of the song it plays (a little bar)
+function partButtons() {
+  const d = P.tab;
+  $("#part-btns").classList.toggle("many", d.tracks.length > 4);
+  $("#part-btns").innerHTML = d.tracks.map((t) => {
+    const share = Math.round(100 * (t.played || 0) / Math.max(1, d.bars.length));
+    return `<button class="part-b ${t.i === d.lead ? "on" : ""} ${P.autoFrom != null && t.i === d.lead ? "auto" : ""}" data-part="${t.i}" title="${esc(t.name)} · plays ${share}% of the song">
+      <span class="pk">${isAcoustic(t) ? "AC" : "EL"}</span>${esc(partName(t))}<i class="share"><b style="width:${share}%"></b></i></button>`;
+  }).join("");
+}
 // "Thom Yorke | Takamine EN10C | Rhythm Guitar" -> "Thom Yorke · Rhythm Guitar"
 function partName(t) {
   const bits = (t.name || "").split(/\s*\|\s*|\s+-\s+/).map((x) => x.trim()).filter(Boolean);
   const name = (bits.length >= 3 ? [bits[0], bits[bits.length - 1]] : bits).join(" · ") || t.instrument || "Guitar";
   return name.length > 34 ? name.slice(0, 33) + "..." : name;  // player · role, short
 }
-// is the followed part silent around bar bi? then say so, and offer the guitar that IS playing
 function restNote(bi) {
   const d = P.tab, me = d.tracks.find((t) => t.i === d.lead), box = $("#tab-rest");
   if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); return; }
@@ -355,7 +385,28 @@ function tabIncomplete() {
 function setPart(i) {
   if (!P.songId) return;
   localStorage.setItem("pl-track-" + P.songId, i);
-  loadTab(P.songId, Number(i));
+  P.autoFrom = null;
+  loadTab(P.songId, Number(i), true);  // same song: the sync stays
+}
+// auto-switch: your guitar rests for 2+ bars and another one plays -> show that one, and come back when yours returns
+function autoPart(bi) {
+  if (!$("#o-autopart").checked || !P.tab || P.tab.error) return;
+  const d = P.tab, mine = P.autoFrom ?? d.lead, mineT = d.tracks.find((t) => t.i === mine);
+  if (!mineT || !mineT.active) return;
+  const plays = (t, b) => t.active && t.active[b] === "1";
+  if (P.autoFrom != null && plays(mineT, bi)) {  // yours is back
+    const back = TABS.get(`${P.songId}:${mine}`);
+    if (back) { P.autoFrom = null; applyTab(back, true); toast("Back to your guitar"); }
+    return;
+  }
+  if (P.autoFrom == null && !plays(mineT, bi) && !plays(mineT, bi + 1)) {
+    const pref = $("#o-prefer").value;
+    const cands = d.tracks.filter((t) => t.i !== mine && plays(t, bi))
+      .sort((a, b) => ((pref !== "any" && (pref === "acoustic") === isAcoustic(b)) - (pref !== "any" && (pref === "acoustic") === isAcoustic(a))) || b.played - a.played);
+    const to = cands[0] && TABS.get(`${P.songId}:${cands[0].i}`);
+    if (to) { P.autoFrom = mine; applyTab(to, true); toast(`Your part rests: showing ${partName(cands[0])}`); }
+    else if (cands[0]) fetchTab(P.songId, cands[0].i);  // get it ready for next time
+  }
 }
 
 function tabEmpty(msg) {
@@ -517,6 +568,7 @@ function playTick() {
     document.querySelectorAll("#pl-map .ch").forEach((el) => el.classList.toggle("now", bi >= +el.dataset.from && bi <= +el.dataset.to));
     setChord(bar.chord || "", nextBar ? nextBar.chord : "");
     restNote(bi);
+    autoPart(bi);
     headsUp();
   } else drawPlayBoard();
 }
@@ -750,7 +802,7 @@ document.addEventListener("click", (e) => {
     document.body.classList.toggle("mode-learn", P.mode === "learn");
     showChips(); P.sig = ""; foot(); headsUp(); drawPlayBoard();
   }
-  if (b.id === "pl-options") openPop("#pop-options");
+  if (b.id === "pl-options") setTab("settings");
   if (b.id === "pl-full") setFull(!document.body.classList.contains("pl-focus"));
   if (b.dataset.show) {
     show()[b.dataset.show] = !show()[b.dataset.show];
@@ -1290,7 +1342,7 @@ $("#o-mute").addEventListener("change", async (e) => {
   refresh();
 });
 
-document.querySelectorAll("#pop-options select").forEach(pillify);
+document.querySelectorAll("#view-settings select").forEach(pillify);
 syncPills();
 
 /* "Show" drop-downs: one opens at a time, a click anywhere else closes them */
@@ -1332,3 +1384,50 @@ function strColor(s) {
   }
   return COLOR.v[s] || "#ffd27a";
 }
+
+/* windows: a close button + Esc bring you back to Play */
+document.querySelectorAll(".view.win").forEach((v) => {
+  const x = document.createElement("button");
+  x.className = "ghost icon win-close"; x.innerHTML = "&#10005;"; x.title = "Back to Play (Esc)";
+  x.addEventListener("click", () => setTab("play"));
+  v.prepend(x);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.body.classList.contains("win-open") && !document.querySelector(".pop:not(.hidden)")) setTab("play");
+});
+
+/* settings: key box, auto-hiding bars */
+function setting(k, d) { try { const v = localStorage.getItem("mp-" + k); return v === null ? d : v === "1"; } catch (e) { return d; } }
+function saveSetting(k, v) { try { localStorage.setItem("mp-" + k, v ? "1" : "0"); } catch (e) { /* fine */ } }
+const showKey0 = setting("showkey", false), autoHide0 = setting("autohide", true);
+$("#o-showkey").checked = showKey0; $("#o-autohide").checked = autoHide0;
+document.body.classList.toggle("no-key", !showKey0);
+$("#o-showkey").addEventListener("change", (e) => { saveSetting("showkey", e.target.checked); document.body.classList.toggle("no-key", !e.target.checked); });
+$("#o-autohide").addEventListener("change", (e) => { saveSetting("autohide", e.target.checked); idle(); });
+// top bars: hidden after 3 s without the mouse near them; back when the mouse goes to the top
+let idleT = null;
+function idle() {
+  document.body.classList.remove("bars-hidden");
+  clearTimeout(idleT);
+  if ($("#o-autohide").checked) idleT = setTimeout(() => { if (!document.querySelector("details.dd[open]") && !document.body.classList.contains("win-open")) document.body.classList.add("bars-hidden"); }, 3000);
+}
+document.addEventListener("mousemove", (e) => { if (e.clientY < 150 || !document.body.classList.contains("bars-hidden")) idle(); });
+idle();
+
+/* sound output icon */
+setInterval(async () => {
+  try {
+    const s = await (await fetch("/api/session")).json(), bt = s.bt || {};
+    const amp = bt["HeadRush Flex Prime"], spk = bt["LP-UNF"];
+    $("#pl-out").innerHTML = `<i class="${amp ? "amp" : spk ? "spk" : "mac"}"></i>${amp ? "Amp" : spk ? "Kali speakers" : "Mac"}`;
+  } catch (e) { /* fine */ }
+}, 4000);
+
+/* "Now" on by default (once, for everyone who had it off) */
+try {
+  if (localStorage.getItem("mp-now-default") !== "1") { SHOW.jam.now = true; SHOW.learn.now = true; localStorage.setItem("pl-show", JSON.stringify(SHOW)); localStorage.setItem("mp-now-default", "1"); showChips(); }
+} catch (e) { /* fine */ }
+
+try { $("#o-autopart").checked = setting("autopart", true); $("#o-prefer").value = localStorage.getItem("mp-prefer") || "any"; syncPills(); } catch (e) { /* fine */ }
+$("#o-autopart").addEventListener("change", (e) => saveSetting("autopart", e.target.checked));
+$("#o-prefer").addEventListener("change", (e) => { try { localStorage.setItem("mp-prefer", e.target.value); } catch (x) { /* fine */ } });

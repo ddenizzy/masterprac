@@ -10,12 +10,14 @@
   <header class="top">
     <div class="brand"><b>MasterPrac</b><span id="song-chip" class="song-chip">No song yet</span></div>
     <nav class="tabs">
-      <button class="tab active" data-tab="songsterr">Songsterr</button>
-      <button class="tab" data-tab="play">Play</button>
-      <button class="tab" data-tab="amp">Amp &amp; tone</button>
-      <button class="tab" data-tab="learn">Learn</button>
-      <button class="tab" data-tab="songs">My songs</button>
-      <button class="tab" data-tab="help">How it works</button>
+      <button class="tab active" data-tab="play">Play</button>
+      <span class="tabs-sep"></span>
+      <button class="tab win" data-tab="songsterr" title="Opens as a window over Play">Songsterr</button>
+      <button class="tab win" data-tab="amp">Amp &amp; tone</button>
+      <button class="tab win" data-tab="learn">Learn</button>
+      <button class="tab win" data-tab="songs">My songs</button>
+      <button class="tab win" data-tab="help">How it works</button>
+      <button class="tab win" data-tab="settings">Settings</button>
     </nav>
     <div class="status">
       <span class="pill" id="pill-sound" title="Where the Mac's sound plays">Sound</span>
@@ -24,7 +26,7 @@
   </header>
 
   <!-- SONGSTERR: a real browser sits over #browser-area (placed by the app) -->
-  <section class="view" id="view-songsterr">
+  <section class="view win hidden" id="view-songsterr">
     <div class="browser-bar">
       <button class="icon" data-nav="back" title="Back">&#8592;</button>
       <button class="icon" data-nav="forward" title="Forward">&#8594;</button>
@@ -38,7 +40,7 @@
   </section>
 
   <!-- PLAY: whatever plays on the Mac (any app) -> its tab from Songsterr, scrolling; chords; the fretboard -->
-  <section class="view hidden" id="view-play">
+  <section class="view" id="view-play">
     <div class="pl-top">
       <div class="pl-song">
         <span class="kicker" id="pl-app">NOTHING PLAYING</span>
@@ -50,11 +52,14 @@
         <button class="seg-b" data-mode="learn" title="Copy the guitarist: the exact string and fret, note by note">Learn the part</button>
       </div>
       <div class="pl-actions">
-        <button class="ghost" id="pl-chords" title="Every chord of the song, part by part">Song chords</button>
-        <button class="ghost" id="pl-options" title="What the fretboard shows, which guitar part, timing">Options</button>
-        <button class="ghost" id="pl-full" title="Only the chord, the tab and the fretboard, over the whole screen (Esc to leave)">Full screen</button>
-        <div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div>
-        <button id="pl-open" disabled>Open in Songsterr &#8599;</button>
+        <span class="out-icon" id="pl-out" title="Where the sound plays now"></span>
+        <button class="ghost" id="pl-chords" title="The song's chords with the lyrics, like a song sheet">Song chords</button>
+        <button class="ghost" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
+        <details class="dd more"><summary>More</summary><div class="dd-menu right">
+          <button class="chip-t" id="pl-options">Options</button>
+          <div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div>
+          <button class="chip-t" id="pl-open" disabled>Open in Songsterr &#8599;</button>
+        </div></details>
       </div>
     </div>
 
@@ -93,9 +98,11 @@
     <div class="pl-foot" id="pl-foot"></div>
   </section>
 
-  <!-- pop-ups -->
-  <div class="pop hidden" id="pop-options"><div class="pop-card opts">
-    <div class="pop-head"><b>Options</b><button class="ghost icon" data-close>&#10005;</button></div>
+  <!-- SETTINGS (window) -->
+  <section class="view win hidden" id="view-settings">
+    <div class="panel opts">
+      <h2>Settings</h2>
+
 
     <section class="o-sec"><h4>Look</h4>
       <div class="o-item"><span class="o-label">Style</span>
@@ -124,12 +131,27 @@
         <span class="o-nudge"><button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></span></div>
     </section>
 
+    <section class="o-sec"><h4>Play page</h4>
+      <label class="o-switch"><input type="checkbox" id="o-showkey"><i></i><span>Show the key box</span></label>
+      <label class="o-switch"><input type="checkbox" id="o-autohide" checked><i></i><span>Hide the top bars when I'm not using them <em>(move the mouse to the top to see them)</em></span></label>
+    </section>
+
+    <section class="o-sec"><h4>Guitar part</h4>
+      <label class="o-switch"><input type="checkbox" id="o-autopart" checked><i></i><span>Switch to a guitar that's playing when mine rests</span></label>
+      <div class="o-item"><span class="o-label">I prefer</span>
+        <select id="o-prefer"><option value="any">Any guitar</option><option value="electric">Electric</option><option value="acoustic">Acoustic</option></select></div>
+    </section>
+
     <section class="o-sec"><h4>Sound</h4>
       <label class="o-switch"><input type="checkbox" id="o-mute"><i></i><span>Mute Spotify while I practise <em>(it keeps playing, so your listening counts)</em></span></label>
     </section>
 
     <div class="o-links"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
-  </div></div>
+
+    </div>
+  </section>
+
+  <!-- pop-ups -->
   <div class="pop hidden" id="pop-versions"><div class="pop-card wide">
     <div class="pop-head"><b>Which tab of this song?</b><button class="ghost icon" data-close>&#10005;</button></div>
     <p class="explain" id="ver-intro">Songsterr often has several tabs of the same song. Pick the one whose guitars and length match your recording.</p>
@@ -142,7 +164,7 @@
   </div></div>
 
   <!-- AMP & TONE -->
-  <section class="view hidden" id="view-amp">
+  <section class="view win hidden" id="view-amp">
     <div class="panel wide">
       <div id="guide"><p class="explain">Open a song in the Songsterr tab: its tone guide appears here.</p></div>
       <h2 class="sec">Your amp right now <span class="sub">read-only</span></h2>
@@ -151,7 +173,7 @@
   </section>
 
   <!-- LEARN: how keys work, with the open song as the example, + ask Claude -->
-  <section class="view hidden" id="view-learn">
+  <section class="view win hidden" id="view-learn">
     <div class="learn">
       <div class="lessons" id="lessons"></div>
       <aside class="chat">
@@ -166,7 +188,7 @@
   </section>
 
   <!-- MY SONGS -->
-  <section class="view hidden" id="view-songs">
+  <section class="view win hidden" id="view-songs">
     <div class="panel">
       <h2>My songs</h2>
       <p class="explain">Click a song to open it in Songsterr. Press &#9734; Favourite in the Songsterr tab to save one here;
@@ -177,7 +199,7 @@
   </section>
 
   <!-- HOW IT WORKS -->
-  <section class="view hidden" id="view-help">
+  <section class="view win hidden" id="view-help">
     <div class="panel">
       <h2>How MasterPrac works</h2>
       <ol class="points">
