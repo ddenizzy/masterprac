@@ -67,6 +67,7 @@
     <div class="tabstrip" id="tabstrip">
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
+      <div class="tab-sync hidden" id="tab-sync"></div>
       <div class="tab-part hidden" id="tab-partbox"><span class="kicker">FOLLOWING</span><select id="tab-part" title="Which guitar part the tab and Learn mode follow"></select></div>
       <div class="tab-rest hidden" id="tab-rest"></div>
     </div>
@@ -85,6 +86,7 @@
     <label>Dots show <select id="o-labels"><option value="names">Note names (A, C#)</option><option value="intervals">Note jobs (R = home, b3 = sad note, 5 = strong note)</option></select></label>
     <label>Part of the neck <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1 (one hand position, learn this first)</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
     <label>Chords come from <select id="o-src"><option value="tab">The song's tab (exact)</option><option value="ear">Listening (by ear)</option></select></label>
+    <label class="o-check"><input type="checkbox" id="o-autosync" checked> Sync the tab to the music by listening (automatic)</label>
     <div class="o-row"><span>Timing: chords or notes early/late?</span>
       <button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></div>
     <div class="o-row"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>

@@ -250,6 +250,7 @@ async function loadTab(id, track) {
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
   if (P.songId !== id) return;  // the song changed meanwhile
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
+  SYNC.samples = []; SYNC.state = "";
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
@@ -495,6 +496,64 @@ async function playEar() {
 }
 setInterval(playEar, 120);
 
+/* ---------- auto-sync: slide the tab until what MasterPrac hears matches what the tab says should sound ---------- */
+// Songsterr times its tab to one recording (often a YouTube video); Spotify's version may start earlier or later.
+// Every ~150 ms: what's sounding now (12 note strengths) + where the player says we are. Every 3 s: try every shift
+// from -10 s to +10 s, score how well the heard notes match the tab's fingerprint, and lock onto the best one.
+const SYNC = { on: true, samples: [], last: 0, state: "", score: 0 };
+try { SYNC.on = localStorage.getItem("pl-autosync") !== "off"; } catch (e) { /* fine */ }
+$("#o-autosync").checked = SYNC.on;
+const cos = (a, b) => { let d = 0, na = 0, nb = 0; for (let i = 0; i < 12; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return na && nb ? d / Math.sqrt(na * nb) : 0; };
+async function syncListen() {
+  if (tab !== "play" || !SYNC.on || !usingTab() || !P.tab.print || !(P.info && P.info.playing)) return;
+  let d;
+  try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
+  if (!d.live) { syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); } return; }
+  if (d.rms < 0.004) return;
+  const raw = playTime() - P.offset - 0.2;  // the sound analysed is ~0.2 s old
+  SYNC.samples.push({ t: raw, c: d.chroma });
+  SYNC.samples = SYNC.samples.filter((x) => raw - x.t < 30 && x.t <= raw);
+  if (performance.now() - SYNC.last > 3000 && SYNC.samples.length >= 40) { SYNC.last = performance.now(); syncSolve(); }
+  else if (!SYNC.state) syncStatus("Listening to sync...");
+}
+setInterval(syncListen, 150);
+function syncSolve() {
+  const pr = P.tab.print, step = P.tab.print_step, scores = [];
+  for (let o = -10; o <= 10.001; o += 0.25) {
+    let sum = 0, n = 0;
+    for (const x of SYNC.samples) {
+      const slot = pr[Math.round((x.t + o) / step)];
+      if (!slot || !slot.some((v) => v)) continue;
+      sum += cos(x.c, slot); n++;
+    }
+    if (n > SYNC.samples.length * 0.5) scores.push({ o: Math.round(o * 100) / 100, s: sum / n });
+  }
+  if (!scores.length) return;
+  scores.sort((a, b) => b.s - a.s);
+  const best = scores[0], median = scores[Math.floor(scores.length / 2)].s;
+  SYNC.score = best.s;
+  if (best.s > 0.5 && best.s - median > 0.06) {  // a clear winner: use it
+    if (Math.abs(best.o - P.offset) >= 0.25) {
+      P.offset = best.o; showOffset(); P.sig = "";
+      if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
+    }
+    SYNC.state = "locked";
+    syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
+  } else {
+    SYNC.state = "";
+    syncStatus("Listening to sync... (not sure yet)");
+  }
+}
+function syncStatus(text, ok) {
+  const el = $("#tab-sync");
+  el.textContent = text; el.classList.toggle("ok", !!ok); el.classList.toggle("hidden", !SYNC.on || !usingTab());
+}
+$("#o-autosync").addEventListener("change", (e) => {
+  SYNC.on = e.target.checked; SYNC.samples = []; SYNC.state = "";
+  try { localStorage.setItem("pl-autosync", SYNC.on ? "on" : "off"); } catch (x) { /* fine */ }
+  syncStatus("Listening to sync...");
+});
+
 function showOffset() { $("#o-off").textContent = `${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`; }
 function scaleHelp() { $("#o-scale-help").textContent = SCALE_HELP[$("#o-scale").value]; }
 scaleHelp();
@@ -519,6 +578,7 @@ document.addEventListener("click", (e) => {
   if (b.id === "pl-options") openPop("#pop-options");
   if (b.id === "pl-chords") { buildMap(); P.barIdx = -1; openPop("#pop-chords"); }
   if (b.dataset.nudge && P.songId) {
+    if (SYNC.on) { SYNC.on = false; $("#o-autosync").checked = false; syncStatus(""); toast("Auto-sync off: you're setting the timing"); }
     P.offset = Math.round((P.offset + Number(b.dataset.nudge)) * 100) / 100;
     localStorage.setItem("pl-offset-" + P.songId, P.offset); showOffset();
   }

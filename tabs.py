@@ -106,6 +106,37 @@ def _tab_beats(track, times):
     return out
 
 
+STEP = 0.25  # seconds per fingerprint slot
+
+
+def _fingerprint(tracks, times):
+    """Which of the 12 notes sound in every quarter second of the song (all guitars + bass), from the tab:
+    what the music SHOULD sound like at each moment. The page compares it with what it hears to sync itself."""
+    end = times[-1][1] if times else 0
+    slots = [[0.0] * 12 for _ in range(int(end / STEP) + 2)]
+    for tr in tracks:
+        tuning = tr["tuning"]
+        for (start, stop), m in zip(times, tr["measures"]):
+            for v in m.get("voices", [])[:1]:
+                pos, beats = 0.0, v.get("beats", [])
+                total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1
+                for b in beats:
+                    frac = b["duration"][0] / b["duration"][1] / total
+                    t0, t1 = start + pos * (stop - start), start + (pos + frac) * (stop - start)
+                    pos += frac
+                    for n in b.get("notes", []):
+                        if "fret" not in n or n.get("rest") or n.get("dead") or n["string"] >= len(tuning):
+                            continue
+                        pc = (tuning[n["string"]] + n["fret"]) % 12
+                        for k in range(max(0, int(t0 / STEP)), min(len(slots), int(t1 / STEP) + 1)):
+                            slots[k][pc] += 1.0
+    out = []
+    for sl in slots:
+        mx = max(sl)
+        out.append([round(x / mx, 2) for x in sl] if mx else [0] * 12)
+    return out
+
+
 def _written_chords(tracks, n_bars):
     """Chord names the tab's author wrote above the music (first one per bar), or None if there are few."""
     out = [""] * n_bars
@@ -233,7 +264,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v9-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v10-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -285,6 +316,8 @@ def load(song_id, lead_index=None):
                  for (s, e), m, c in zip(times, lt["measures"], _bar_chords(harmony, bass, len(lt["measures"])))],
         "events": _events(lt, times),
         "beats": _tab_beats(lt, times),
+        "print": _fingerprint([lt] + harmony + ([bass] if bass else []), times),
+        "print_step": STEP,
         "tuning_name": tuning_name(tuning),
         "tempo": next((a["bpm"] for a in lt.get("automations", {}).get("tempo", [])), None),
         "key": None,

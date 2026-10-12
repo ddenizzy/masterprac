@@ -250,17 +250,23 @@ def start_session(api):
         return
     if sp["state"] == "playing":
         log(h.spotify_mute() if h.plugged_in() else h.spotify_pause())
-    log(h.bt_disconnect(h.SPEAKER_BT)[1])
+    # the amp first: only let go of the speakers if the amp really connected (amp off = sound stays where it was)
     ok, msg = h.bt_connect(h.AMP_BT)
-    log(msg + (" The Mac's sound now plays through your amp." if ok else ""))
+    if ok:
+        log(h.bt_disconnect(h.SPEAKER_BT)[1])
+        SESSION["switched"] = True
+        log(msg + " The Mac's sound now plays through your amp.")
+    else:
+        log(msg + " Your speakers were left as they were.")
 
 
 def end_session():
     if DRY or SESSION.get("ended"):
         return
     SESSION["ended"] = True
-    print(" ", h.bt_disconnect(h.AMP_BT)[1], flush=True)
-    print(" ", h.bt_connect(h.SPEAKER_BT)[1], flush=True)
+    if SESSION.get("switched"):  # only undo a switch we made
+        print(" ", h.bt_disconnect(h.AMP_BT)[1], flush=True)
+        print(" ", h.bt_connect(h.SPEAKER_BT)[1], flush=True)
     print(" ", h.spotify_restore(), flush=True)
 
 
