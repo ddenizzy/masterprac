@@ -517,76 +517,47 @@ function drawTab() {
     h += s + "</g>";
   });
   h += `<g class="tq">${tech}</g>`;
-  lyBuild(d);  // the words go in the karaoke bar under the tab (see lyTick), not in the scrolling tab
+  // lyrics: ONE lane, moving with the tab. Every syllable starts exactly where it's sung (never pushed later, so it
+  // reaches the playhead when it's sung); when words come fast they get squeezed narrower instead. A long-held
+  // syllable gets dashes up to the next one. Songsterr keeps the words on only some parts: keep the song's words.
+  if (d.lyrics && d.lyrics.length) P.lyKeep = { song: P.songId, lyrics: d.lyrics };
+  const words = d.lyrics && d.lyrics.length ? d.lyrics : P.lyKeep && P.lyKeep.song === P.songId ? P.lyKeep.lyrics : [];
+  P.lyDrawn = TSHOW.lyrics ? words : [];
+  const fs = 17 * Z, cw = fs * 0.56, ly0 = yEnd + 40 * Z;
+  const fit = (x, text, room) => {  // squeeze a word into the room it has (down to half its width)
+    const w = text.length * cw;
+    return w > room ? ` textLength="${Math.max(room, w * 0.5).toFixed(1)}" lengthAdjust="spacingAndGlyphs"` : "";
+  };
+  P.lyDrawn.forEach(([t, syl, nl], i) => {
+    const x = t * PX + 6, text = syl.replace(/-$/, ""), next = P.lyDrawn[i + 1];
+    const nx = next ? next[0] * PX + 6 : Infinity, room = nx - x - (next && next[2] ? cw * 1.2 : cw * 0.3);
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x.toFixed(1)}" y="${ly0}"${fit(x, text, room)}>${esc(text)}</text>`;
+    const end = x + Math.min(text.length * cw, Math.max(room, text.length * cw * 0.5));
+    const gap = next && !next[2] ? nx - end : 0;
+    if (gap > cw * 4) {  // held long: dashes spread over the gap
+      const n = Math.min(12, Math.floor(gap / (cw * 2.2)));
+      for (let k = 1; k <= n; k++) h += `<text class="tlyric dash" x="${(end + (gap * k) / (n + 1) - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
+    } else if (syl.endsWith("-") && gap > cw * 1.4) h += `<text class="tlyric dash" x="${(end + gap / 2 - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
+  });
+  // timed lines from LRCLIB (no words in the tab): recording time + the sync shift
+  P.lrcDrawnAt = P.offset;
+  const lrc = TSHOW.lyrics && !P.lyDrawn.length ? P.lrc || [] : [];
+  lrc.forEach(([t, line], i) => {
+    const x = (t + P.offset) * PX + 6, nx = lrc[i + 1] ? (lrc[i + 1][0] + P.offset) * PX + 6 : Infinity;
+    h += `<text class="tlyric first" id="lr${i}" x="${x.toFixed(1)}" y="${ly0}"${fit(x, line, nx - x - cw * 2)}>${esc(line)}</text>`;
+  });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
   $("#tab-names").innerHTML = `<rect class="tnames-bg" x="0" y="${y0 - 10}" width="24" height="${yEnd - y0 + 20}"/>` +
     d.tuning.map((open, s) => `<text class="tname" x="12" y="${ys(s) + 4}">${nn(open % 12)}</text>`).join("");
   layoutTab();
 }
-/* ---------- lyrics: karaoke lines under the tab ----------
- * The tab scrolls fast (so notes have room), far too fast to read words on it. So the line being sung stands still,
- * each syllable lights up as it's sung (held ones get dashes that fill in), and the next line waits underneath. */
-function lyBuild(d) {
-  const L = [];
-  // the words sit on only some of Songsterr's parts: keep the song's words whichever guitar is shown
-  if (d.lyrics && d.lyrics.length) P.lyKeep = { song: P.songId, lyrics: d.lyrics };
-  else if (P.lyKeep && P.lyKeep.song === P.songId) d = { lyrics: P.lyKeep.lyrics };
-  if (TSHOW.lyrics && d.lyrics && d.lyrics.length) {
-    let cur = null;
-    d.lyrics.forEach(([t, syl, nl], i) => {
-      if (nl || !cur) { cur = { t, parts: [] }; L.push(cur); }
-      const next = d.lyrics[i + 1], same = next && !next[2], end = same ? next[0] : t + 0.7;
-      const part = { t, text: syl.replace(/-$/, ""), gap: !syl.endsWith("-") };
-      cur.parts.push(part);
-      const held = end - t;
-      if (held > 1.2 && same) {  // held long: dashes that light up while it's still being sung
-        part.gap = true;
-        const n = Math.min(4, Math.floor(held / 0.6));
-        for (let k = 1; k <= n; k++) cur.parts.push({ t: t + (held * k) / (n + 1), text: "-", gap: true, dash: true });
-      }
-      cur.end = end;
-    });
-  } else if (TSHOW.lyrics && P.lrc && P.lrc.length) {  // LRCLIB: whole lines (recording time), no word timing
-    P.lrc.forEach(([t, line], i) => {
-      const nx = P.lrc[i + 1];
-      L.push({ t, end: Math.min(nx ? nx[0] : t + 6, t + Math.max(2, line.length * 0.13)), parts: [{ t, text: line, gap: true }], whole: true });
-    });
-    L.lrc = true;
-  }
-  P.lyLines = L; P.lyShown = null;
-  const bar = $("#ly-bar");
-  if (bar) { bar.classList.toggle("hidden", !L.length); $("#ly-now").innerHTML = ""; $("#ly-next").innerHTML = ""; }
-}
-const lyHTML = (line) => (line ? line.parts.map((p, k) => `<span class="${p.dash ? "dash" : ""}" data-k="${k}">${esc(p.text)}</span>${p.gap ? " " : ""}`).join("") : "");
-function lyTick(t) {
-  const L = P.lyLines;
-  if (!L || !L.length) return;
-  const tt = L.lrc ? t - P.offset : t;  // LRCLIB times are the recording's
-  let li = lastAt(L, tt, (l) => l.t);
-  // a finished line makes way early, so you can read the next one before it's sung
-  if (li < 0 ? L[0].t - tt < 6 : tt > L[li].end + 0.6 && L[li + 1]) li = li < 0 ? 0 : li + 1;
-  if (li < 0) li = -1;
-  if (li !== P.lyShown) {
-    P.lyShown = li;
-    $("#ly-now").innerHTML = lyHTML(L[li]);
-    $("#ly-next").innerHTML = lyHTML(L[li + 1]);
-    P.lySpans = [...$("#ly-now").children]; P.lyLit = -1;
-  }
-  const line = L[li];
-  if (!line) return;
-  const k = tt < line.t ? -1 : lastAt(line.parts, tt, (p) => p.t);
-  if (k !== P.lyLit) {
-    P.lySpans.forEach((el, j) => { el.classList.toggle("sung", j < k); el.classList.toggle("on", j === k); });
-    P.lyLit = k;
-  }
-}
 function layoutTab() {
   const svg = $("#tab-svg"), W = svg.clientWidth || 1000, H = svg.clientHeight || 170;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const hx = Math.round(W * 0.22);
   const head = $("#tab-head");
-  head.setAttribute("x1", hx); head.setAttribute("x2", hx); head.setAttribute("y1", 38); head.setAttribute("y2", H - ($("#ly-bar") && !$("#ly-bar").classList.contains("hidden") ? 50 : 6));  // stops above the words
+  head.setAttribute("x1", hx); head.setAttribute("x2", hx); head.setAttribute("y1", 38); head.setAttribute("y2", H - 6);
   P.headX = hx;
 }
 new ResizeObserver(() => { layoutTab(); drawPlayBoard(); }).observe($("#tabstrip"));
@@ -624,7 +595,15 @@ function playTick() {
     if (bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1]) document.getElementById("tb" + bt)?.classList.add("on");
     P.beatIdx = bt;
   }
-  lyTick(t);
+  if (P.lrc && P.lrc.length && !(P.lyDrawn && P.lyDrawn.length)) {
+    if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
+    const li = lastAt(P.lrc, t - P.offset, (x) => x[0]);
+    if (li !== P.lrIdx) { document.getElementById("lr" + P.lrIdx)?.classList.remove("on"); document.getElementById("lr" + li)?.classList.add("on"); P.lrIdx = li; }
+  }
+  if (P.lyDrawn && P.lyDrawn.length) {  // light up the syllable being sung
+    const li = lastAt(P.lyDrawn, t, (x) => x[0]);
+    if (li !== P.lyIdx) { document.getElementById("ly" + P.lyIdx)?.classList.remove("on"); document.getElementById("ly" + li)?.classList.add("on"); P.lyIdx = li; }
+  }
   const sig = `${bi}|${notesShown() ? bt + "|" + ei + "|" + (cur ? 1 : 0) : ""}`;
   if (sig === P.sig) return;
   P.sig = sig;
