@@ -151,15 +151,31 @@ _match_lock = threading.Lock()
 _followed = {"key": None}
 
 
-def best_version(title, artist):
-    """The tab version you picked for this song, else Songsterr's top one (or a more complete one if that's unfinished)."""
+def best_version(title, artist, duration=0):
+    """The tab version you picked for this song, else Songsterr's top one (or a more complete one if that's unfinished,
+    or one as long as the recording if the top one is much shorter / longer: a half-song tab once ended at 2:16 of 4:26)."""
     import tabs
     pick = h.load("version_choice", {}).get(f"{title}|{artist}".lower())
     if pick:
         return pick
-    found = h.songsterr_matches(title, artist)[:4]
+    found = h.songsterr_matches(title, artist)[:6]
     if len(found) <= 1:
         return found[0] if found else None
+
+    def length(m):
+        try:
+            d = tabs.load(m["id"])
+            return d["bars"][-1]["end"] if d["bars"] else 0
+        except Exception:
+            return 0
+    if duration > 30:
+        off = lambda m: abs(length(m) - duration) / duration
+        if off(found[0]) > 0.15:
+            near = [m for m in found if off(m) <= 0.1]
+            if near:
+                best = near[0]  # Songsterr's order among the ones that fit (best-made / most-viewed first)
+                log(f"Using a Songsterr tab of \"{title}\" as long as the recording ({round(length(best))} s of {round(duration)} s).")
+                return best
 
     def coverage(m):
         try:
@@ -214,7 +230,7 @@ def now():
         k = f"{p['title']}|{p['artist']}".lower()
         with _match_lock:  # the page asks every second: look it up once
             if k not in _matches:
-                _matches[k] = best_version(p["title"], p["artist"])
+                _matches[k] = best_version(p["title"], p["artist"], p.get("duration") or 0)
             if _matches[k] and _followed.get("key") != k:  # the playing song changed: follow it
                 _followed["key"] = k
                 follow_song(_matches[k])
@@ -353,7 +369,7 @@ def watch_now_playing():
             k = f"{p['title']}|{p['artist']}".lower()
             with _match_lock:
                 if k not in _matches:
-                    _matches[k] = best_version(p["title"], p["artist"])
+                    _matches[k] = best_version(p["title"], p["artist"], p.get("duration") or 0)
                 if _matches[k] and _followed.get("key") != k:
                     _followed["key"] = k
                     follow_song(_matches[k])

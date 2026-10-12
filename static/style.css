@@ -208,7 +208,7 @@ button.mini { padding: 3px 9px; font-size: 12px; margin-left: 6px; }
 .dot.chord { background: #7ed98b; } .dot.scale { background: #4a413b; border: 1px solid #a89a8a; } .dot.root { background: var(--accent); }
 
 /* full screen: only the chord, the tab and the fretboard */
-body.pl-focus .top, body.pl-focus .pl-heads, body.pl-focus .pl-foot, body.pl-focus .ph-hint, body.pl-focus .pl-actions > :not(#pl-full), body.pl-focus .pl-time { display: none !important; }
+body.pl-focus .top .tabs, body.pl-focus .top .brand, body.pl-focus .top .status > :not(#pl-full), body.pl-focus .pl-heads, body.pl-focus .pl-foot, body.pl-focus .ph-hint, body.pl-focus .pl-actions > :not(#pl-full), body.pl-focus .pl-time { display: none !important; }
 body.pl-focus #view-play { padding: 12px 16px; gap: 10px; }
 
 body.pl-focus .np-box.big b { font-size: 60px; }
@@ -520,7 +520,7 @@ body.win-open #view-play { filter: blur(3px) brightness(.55); pointer-events: no
 /* auto-hiding top bars */
 .top, .pl-top { transition: transform .25s ease, opacity .25s ease, margin .25s ease; }
 body.bars-hidden .top { transform: translateY(-100%); opacity: 0; margin-bottom: -62px; }
-body.bars-hidden .pl-actions, body.bars-hidden .pl-mode { opacity: 0; pointer-events: none; }
+body.bars-hidden .pl-actions { opacity: 0; pointer-events: none; }
 /* key box: off unless chosen */
 body.no-key .np-box:has(#pl-key) { display: none; }
 /* More menu */
@@ -559,7 +559,8 @@ details.howto summary::before { content: "? "; font-weight: 800; color: var(--ac
 .lg.held { width: 16px; height: 16px; border-radius: 50%; background: rgba(80,170,255,.22); border: 2px dashed rgba(120,190,255,.75); }
 
 /* ---------- Song chords mode ---------- */
-body.sheet-mode #tabstrip, body.sheet-mode #highway, body.sheet-mode .pl-ph[data-panel="tab"], body.sheet-mode details.howto { display: none !important; }
+body.sheet-mode #tabstrip, body.sheet-mode #highway, body.sheet-mode details.howto { display: none !important; }
+body.sheet-mode .pl-ph[data-panel="tab"] > :not(.view-seg) { display: none !important; }  /* the view switch stays: the way back */
 .sheet { display: grid; gap: 12px; flex-shrink: 0; }
 .sheet-chords { display: flex; gap: 8px; flex-wrap: wrap; }
 .cd-btn { padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
@@ -596,7 +597,7 @@ body.neon .sh-c { color: #39ff88; }
 body.practice #tab-sync { display: none; }
 
 /* party mode */
-body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph, body.party-mode .board-wrap, body.party-mode details.howto, body.party-mode .pl-foot { display: none !important; }
+body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph[data-panel="board"], body.party-mode .board-wrap, body.party-mode details.howto, body.party-mode .pl-foot { display: none !important; }
 .party { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 12px; }
 .party-part { padding: 10px 12px 6px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
 .party-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
@@ -619,3 +620,25 @@ body.no-boxes .np-box.np-info { display: none; }
 .tbg.rep { fill: transparent; }
 body.neon .trep { stroke: #6d6aa8; } body.neon .tb.on .trep { stroke: #c9b0ff; }
 .pl-heads.quiet { display: none; }
+
+/* the Play page, calmer: each control sits next to what it changes (no button row under the song, no More menu) */
+body.party-mode .pl-ph[data-panel="tab"] > :not(#tab-partbox), body.party-mode #part-btns, body.party-mode #tab-partbox .kicker { display: none !important; }
+.pill-btn { cursor: pointer; font-family: inherit; background: transparent; }
+.pill-btn:hover { color: var(--text, #fff); border-color: var(--muted); }
+.brand { white-space: nowrap; min-width: 0; } .brand .song-chip { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.all-b { margin-left: 2px; }
+.all-b.on { background: var(--accent, #f5a524); color: #1a1205; }
+.pl-ph[data-panel="board"] .pl-mode { margin-left: 4px; }
+.o-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.pl-ph[data-panel="board"] .pl-mode .seg-b { font-size: 13px; padding: 5px 12px; }
+body.pl-focus .top { background: transparent; border: 0; justify-content: flex-end; }
+.tmute { stroke: #9a8f82; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 3; }
+.tb.on .tmute { stroke: #e8461a; }
+body.neon .tmute { stroke: #5d5b99; }
+/* room for: tab, technique words, strum arrows, two lyric lanes (nothing overlaps) */
+.tabstrip { height: 272px; }
+body.pl-focus .tabstrip { height: 336px; }
+.tq-strum { stroke-width: 2.2; }
+.fx-mute line { stroke: #8f8a84; stroke-width: 4; }
+.fx-mute rect { fill: #8f8a84; }
+.fx-incoming { fill: none; stroke-width: 3; stroke-dasharray: 5 4; }

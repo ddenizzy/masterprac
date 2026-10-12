@@ -320,6 +320,19 @@ def _port_free():
         return so.connect_ex(("127.0.0.1", PORT)) != 0
 
 
+
+def _no_beep():
+    """macOS plays its error beep when a key (Space, Esc...) reaches a window and nothing uses it: stay quiet instead."""
+    try:
+        from webview.platforms.cocoa import BrowserView
+
+        def noResponderFor_(self, sel):
+            pass
+        objc.classAddMethods(BrowserView.WindowHost, [noResponderFor_])
+    except Exception as e:
+        print(f"  (couldn't silence the key beep: {e})", flush=True)
+
+
 def main():
     import time
     for _ in range(20):  # a previous MasterPrac may still be closing: wait a moment instead of colliding
@@ -376,6 +389,7 @@ def main():
         threading.Thread(target=count_practice, daemon=True).start()
 
     try:
+        _no_beep()
         webview.start(on_start)
     finally:
         end_session()

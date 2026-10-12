@@ -407,12 +407,13 @@ function tabIncomplete() {
 function setPart(i) {
   if (!P.songId) return;
   localStorage.setItem("pl-track-" + P.songId, i);
-  P.autoFrom = null;
+  P.autoFrom = null; P.manualAt = Date.now();  // you chose it: the auto-switch leaves it alone for a while
+  document.querySelectorAll("#part-btns [data-part]").forEach((b) => b.classList.toggle("on", b.dataset.part === String(i)));
   loadTab(P.songId, Number(i), true);  // same song: the sync stays
 }
 // auto-switch: your guitar rests for 2+ bars and another one plays -> show that one, and come back when yours returns
 function autoPart(bi) {
-  if (!$("#o-autopart").checked || !P.tab || P.tab.error) return;
+  if (!$("#o-autopart").checked || !P.tab || P.tab.error || Date.now() - (P.manualAt || 0) < 30000) return;
   const d = P.tab, mine = P.autoFrom ?? d.lead, mineT = d.tracks.find((t) => t.i === mine);
   if (!mineT || !mineT.active) return;
   const plays = (t, b) => t.active && t.active[b] === "1";
@@ -436,7 +437,7 @@ function tabEmpty(msg) {
 }
 
 // what the tab shows (its SHOW switches, remembered)
-const TSHOW = { lyrics: true, chords: true, held: true, muted: true, tech: true, reps: false };
+const TSHOW = { lyrics: true, chords: true, held: true, muted: true, tech: true, reps: false, strum: true };
 try { Object.assign(TSHOW, JSON.parse(localStorage.getItem("pl-tshow") || "{}")); } catch (e) { /* defaults */ }
 function tabChips() { document.querySelectorAll("[data-tshow]").forEach((b) => b.classList.toggle("on", !!TSHOW[b.dataset.tshow])); }
 tabChips();
@@ -474,7 +475,7 @@ function drawTab() {
   // line to it, slide in / out = a short slanted line, bend = an arrow up, vibrato = a wavy line, muted = x
   const lastOn = {};   // string -> {x, w, fl} of the previous note (to join arcs / slides)
   let tech = "";
-  const flagWords = { pm: "P.M.", lr: "let ring", tr: "tremolo", wh: "whammy", gr: "grace" };
+  const flagWords = { pm: "P.M.", tr: "tremolo", wh: "whammy", gr: "grace" };  // (no "let ring" on every note: it's the normal way)
   // the same chord strummed again in the same bar: a light rhythm line instead of all the numbers again, so the eye
   // goes to where the chord CHANGES (numbers come back on a new chord / a new bar; Show > Repeated strums: numbers)
   let prevKey = "", prevBar = -1;
@@ -490,9 +491,10 @@ function drawTab() {
       s += `<rect class="tbg rep" x="${x - 1}" y="${yA - 4}" width="${10 * Z}" height="${yB - yA + 8}" rx="3"/><line class="trep" x1="${x + 4 * Z}" y1="${yA - 2}" x2="${x + 4 * Z}" y2="${yB + 2}"/>`;
       for (const [st] of notes) lastOn[st] = { x, w: 8 * Z, fl: "", f: 0 };
     }
+    const muted = [];
     for (const [st, f, fl] of repeat ? [] : notes) {
       if (!TSHOW.held && fl.includes("t")) continue;  // still ringing: not picked again
-      if (!TSHOW.muted && fl.includes("x")) continue;
+      if (fl.includes("x")) { if (TSHOW.muted) muted.push(st); continue; }  // muted: one line, not a row of x's
       const label = fl.includes("x") ? "x" : /[HP]/.test(fl) ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
       const w = (label.length * 8 + 4) * Z, y = ys(st), prev = lastOn[st];
       s += `<rect class="tbg" x="${x - 2}" y="${y - 8 * Z}" width="${w}" height="${16 * Z}" rx="3"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${y + 5 * Z}">${esc(label)}</text>`;
@@ -521,10 +523,15 @@ function drawTab() {
       }
       lastOn[st] = { x, w, fl, f };
     }
-    if (bf && TSHOW.tech) {
+    if (muted.length) {  // muted (scratchy) hit: a grey line across the muted strings
+      const yA = ys(Math.min(...muted)) - 6 * Z, yB = ys(Math.max(...muted)) + 6 * Z;
+      s += muted.length > 1 ? `<line class="tmute" x1="${x + 4 * Z}" y1="${yA}" x2="${x + 4 * Z}" y2="${yB}"/>`
+        : `<line class="tmute" x1="${x}" y1="${yB}" x2="${x + 8 * Z}" y2="${yA}"/>`;
+    }
+    if (bf && (TSHOW.tech || TSHOW.strum)) {
       const words = bf.split(" ").map((k) => flagWords[k]).filter(Boolean).join(" · ");
-      if (words) s += `<text class="tflag" x="${x}" y="${yEnd + 16 * Z}">${words}</text>`;
-      if (/\bs[du]\b/.test(bf)) {        // strum direction: a small arrow under the strings
+      if (words && TSHOW.tech) s += `<text class="tflag" x="${x}" y="${yEnd + 16 * Z}">${words}</text>`;
+      if (TSHOW.strum && /\bs[du]\b/.test(bf)) {  // strum direction: an arrow under the strings (Show > Strum arrows)
         const dn = /\bsd\b/.test(bf);
         s += `<path class="tq-strum" d="M${x + 4} ${yEnd + (dn ? 22 : 34) * Z} L${x + 4} ${yEnd + (dn ? 34 : 22) * Z} M${x} ${yEnd + (dn ? 30 : 26) * Z} L${x + 4} ${yEnd + (dn ? 34 : 22) * Z} L${x + 8} ${yEnd + (dn ? 30 : 26) * Z}"/>`;
       }
@@ -538,21 +545,37 @@ function drawTab() {
   if (d.lyrics && d.lyrics.length) P.lyKeep = { song: P.songId, lyrics: d.lyrics };
   const words = d.lyrics && d.lyrics.length ? d.lyrics : P.lyKeep && P.lyKeep.song === P.songId ? P.lyKeep.lyrics : [];
   P.lyDrawn = TSHOW.lyrics ? words : [];
-  const fs = 17 * Z, cw = fs * 0.56, ly0 = yEnd + 40 * Z;
-  const fit = (x, text, room) => {  // squeeze a word into the room it has (down to half its width)
-    const w = text.length * cw;
-    return w > room ? ` textLength="${Math.max(room, w * 0.5).toFixed(1)}" lengthAdjust="spacingAndGlyphs"` : "";
+  const fs = 17 * Z, cw = fs * 0.56, ly0 = yEnd + 56 * Z;  // below the technique words + strum arrows: nothing overlaps
+  // where a word goes: always at its exact moment and normal width. One lane; when a word would run into the one
+  // before it (fast singing, rap) it goes on a second lane just below instead of being squeezed or pushed late
+  const lanes = [-1e9, -1e9], laneY = [ly0, ly0 + 19 * Z];
+  const meas = document.createElement("canvas").getContext("2d");
+  meas.font = `700 ${fs}px -apple-system, "SF Pro Rounded", sans-serif`;
+  const width = (t) => meas.measureText(t).width;
+  const place = (x, text, join, newLine) => {
+    const w = width(text), gap = join ? 2 : newLine ? cw * 1.2 : cw * 0.45, nudge = cw * 1.1;
+    let L, at = x;
+    if (x >= lanes[0] + gap) L = 0;
+    else if (lanes[0] + gap - x <= nudge) { L = 0; at = lanes[0] + gap; }  // just a little crowded: nudge it (~0.05 s)
+    else if (x >= lanes[1] + gap) L = 1;                                    // really crowded: the lane below
+    else { L = lanes[0] <= lanes[1] ? 0 : 1; at = lanes[L] + gap; }
+    lanes[L] = at + w;
+    return { y: laneY[L], x: at, end: at + w, L };
+  };
+  const dashes = (from, to, L, max) => {  // a held syllable: dashes over the gap, on its lane
+    const gap = to - from;
+    if (gap < (max === 1 ? cw * 0.9 : cw * 3)) return;
+    const n = max === 1 ? 1 : Math.min(max, Math.floor(gap / (cw * 2.2)));
+    for (let k = 1; k <= n; k++) h += `<text class="tlyric dash" x="${(from + (gap * k) / (n + 1) - cw / 2).toFixed(1)}" y="${laneY[L]}">-</text>`;
+    lanes[L] = Math.max(lanes[L], to - cw);
   };
   P.lyDrawn.forEach(([t, syl, nl], i) => {
-    const x = t * PX + 6, text = syl.replace(/-$/, ""), next = P.lyDrawn[i + 1];
-    const nx = next ? next[0] * PX + 6 : Infinity, room = nx - x - (next && next[2] ? cw * 1.2 : cw * 0.3);
-    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x.toFixed(1)}" y="${ly0}"${fit(x, text, room)}>${esc(text)}</text>`;
-    const end = x + Math.min(text.length * cw, Math.max(room, text.length * cw * 0.5));
-    const gap = next && !next[2] ? nx - end : 0;
-    if (gap > cw * 4) {  // held long: dashes spread over the gap
-      const n = Math.min(12, Math.floor(gap / (cw * 2.2)));
-      for (let k = 1; k <= n; k++) h += `<text class="tlyric dash" x="${(end + (gap * k) / (n + 1) - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
-    } else if (syl.endsWith("-") && gap > cw * 1.4) h += `<text class="tlyric dash" x="${(end + gap / 2 - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
+    const x = t * PX + 6, text = syl.replace(/-$/, ""), next = P.lyDrawn[i + 1], prev = P.lyDrawn[i - 1];
+    const q = place(x, text, prev && prev[1].endsWith("-") && !nl, nl);
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${q.x.toFixed(1)}" y="${q.y}">${esc(text)}</text>`;
+    const nx = next ? next[0] * PX + 6 : Infinity;
+    if (next && !next[2] && nx - q.end > cw * 4) dashes(q.end + cw * 0.3, nx - cw * 0.3, q.L, 12);       // held long
+    else if (syl.endsWith("-") && next && nx - q.end > cw * 0.9) dashes(q.end, nx, q.L, 1);             // inside a word: ev-er
   });
   // timed lines from LRCLIB (no words in the tab): they only know when each LINE starts. So each line is spread over
   // the time it's sung (up to the next line), every word given time by its syllables: the words pass the playhead
@@ -574,17 +597,13 @@ function drawTab() {
     syl.forEach((parts, wi) => {
       parts.forEach((sy, si) => {
         const st = t0 + k * pace, sx = st * PX + 6, lastOfLine = wi === syl.length - 1 && si === parts.length - 1;
-        const nt = lastOfLine ? holdEnd : t0 + (k + 1) * pace, room = nt * PX + 6 - sx - (si < parts.length - 1 ? cw * 1.2 : cw * 0.5);
         const id = `lr${i}s${k}`;
-        h += `<text class="tlyric ${k ? "" : "first"}" id="${id}" x="${sx.toFixed(1)}" y="${ly0}"${fit(sx, sy, room)}>${esc(sy)}</text>`;
-        const end = sx + Math.min(sy.length * cw, Math.max(room, sy.length * cw * 0.5));
+        const q = place(sx, sy, si > 0, k === 0);
+        h += `<text class="tlyric ${k ? "" : "first"}" id="${id}" x="${q.x.toFixed(1)}" y="${q.y}">${esc(sy)}</text>`;
         if (si < parts.length - 1) {  // inside a word: a dash to the next syllable
-          const gx = (t0 + (k + 1) * pace) * PX + 6 - end;
-          if (gx > cw * 1.1) h += `<text class="tlyric dash" x="${(end + gx / 2 - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
-        } else if (lastOfLine) {      // held at the end of the line: dashes up to where it stops
-          const gx = holdEnd * PX + 6 - end;
-          if (gx > cw * 4) { const m = Math.min(10, Math.floor(gx / (cw * 2.4))); for (let q = 1; q <= m; q++) h += `<text class="tlyric dash" x="${(end + (gx * q) / (m + 1) - cw / 2).toFixed(1)}" y="${ly0}">-</text>`; }
-        }
+          const nx = (t0 + (k + 1) * pace) * PX + 6;
+          if (nx - q.end > cw * 0.9) dashes(q.end, nx, q.L, 1);
+        }  // (no dashes after the end of a line: the singer simply stops)
         P.lrcWords.push([st, id]);
         k++;
       });
@@ -685,7 +704,7 @@ function setChord(name, next) {
 
 // things worth knowing about what's coming: tuning, the next part, techniques, the tab author's notes
 const TECH = { b: "bends", B: "big bends (a whole step)", s: "slides", i: "slides into notes", I: "slides into notes", o: "slides out", O: "slides out", h: "hammer-ons / pull-offs", x: "muted (scratchy) notes", v: "vibrato", H: "harmonics",
-  pm: "palm mute (rest your picking hand on the strings)", lr: "let the notes ring", tr: "fast tremolo picking" };
+  pm: "palm mute (rest your picking hand on the strings)", tr: "fast tremolo picking" };  // (no "let ring" tip: it's the normal way)
 function headsUp(extra) {
   const out = [], d = usingTab() ? P.tab : null;
   if (extra) out.push(extra);
@@ -763,7 +782,7 @@ function applyCollapsed() {
 // full screen: just the chord, the tab and the fretboard (Esc or the button to leave)
 function setFull(on) {
   document.body.classList.toggle("pl-focus", on);
-  $("#pl-full").textContent = on ? "Show everything" : "Full screen";
+  $("#pl-full").textContent = on ? "Leave full screen" : "Full screen";
   // entering also puts the window in macOS full screen; leaving only leaves the focus view (the app stays full screen)
   if (on && api() && api().fullscreen) api().fullscreen(true);
   setTimeout(() => { drawTab(); layoutTab(); drawPlayBoard(); }, 400);
@@ -1216,7 +1235,15 @@ function fxDraw() {
     const openBetween = sh.some(([st, f]) => f === 0 && st > from && st < to);   // an open string inside = no barre
     const above = frettedS.filter(([, f]) => f > f0).length;                     // notes the other 3 fingers must play
     const adjacentOnly = to - from === 1 && atF0.length === 2;
-    const isBarre = atF0.length >= 2 && !openBetween && above <= 3 && (!adjacentOnly || frettedS.length >= 5);
+    // a barre only when the hand needs one: more notes than 4 fingers, or 4+ strings on one fret (F, Bm...). The
+    // chord's real shape decides when it's a known one (D = 3 separate fingers, not a barre over G and high E)
+    const known = (() => {
+      const bar = P.tab && P.tab.bars[Math.max(0, P.barIdx)], cs = bar && bar.chord && typeof chordShape === "function" ? chordShape(bar.chord) : null;
+      if (!cs) return null;
+      const match = frettedS.every(([st, f]) => cs.frets[geo.strings - 1 - st] === f);
+      return match ? !!(cs.barre && cs.barre.fret === f0) : null;
+    })();
+    const isBarre = known ?? (atF0.length >= 2 && !openBetween && above <= 3 && (frettedS.length > 4 || atF0.length >= 4) && !adjacentOnly);
     if (isBarre) {
       const x = fretX(geo, f0), w = geo.r * 2 + 10, y1 = geo.sy(from) - geo.r - 4, y2 = geo.sy(to) + geo.r + 4;
       const live = FX.notes.some((n) => n.f === f0 && n.s >= from && n.s <= to);
@@ -1289,9 +1316,10 @@ function fxDraw() {
     if ((n.bf || "").includes("tr")) rr *= 1 + 0.12 * Math.sin(now / 1000 * 2 * Math.PI * 14);  // tremolo picking: fast flicker
     if ((n.bf || "").includes("pm")) rr *= 0.85;                                                   // palm muted: smaller, dull
     const op = q.fade * (n.fl.includes("g") ? 0.5 : 1);
-    if (n.fl.includes("x")) {  // muted (dead) note: an X
-      const k = rr * 0.7;
-      h += `<g class="note dead s${n.s}" opacity="${op.toFixed(2)}"><path d="M${q.x - k} ${q.y - k} L${q.x + k} ${q.y + k} M${q.x + k} ${q.y - k} L${q.x - k} ${q.y + k}"/></g>`;
+    if (n.fl.includes("x")) {  // muted (dead) hit: the string goes grey and still for a moment, a band where the hand damps it
+      const a = Math.max(0, 1 - (now - n.pickedAt) / 1000 / Math.min(0.35, Math.max(0.15, n.gap * 0.9)));
+      if (a > 0) h += `<g class="fx-mute" opacity="${(a * op).toFixed(2)}"><line x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}"/>
+        <rect x="${q.x - rr * 1.6}" y="${q.y - rr * 0.45}" width="${rr * 3.2}" height="${rr * 0.9}" rx="${rr * 0.45}"/></g>`;
     } else if (/[HP]/.test(n.fl)) {  // harmonic: a diamond with a sparkle
       h += `<g class="note play harm s${n.s}" opacity="${op.toFixed(2)}"><path d="M${q.x} ${q.y - rr - 3} L${q.x + rr + 3} ${q.y} L${q.x} ${q.y + rr + 3} L${q.x - rr - 3} ${q.y} Z"/>
         <path class="spark" d="M${q.x + rr + 6} ${q.y - rr - 6} l6 -6 M${q.x + rr + 10} ${q.y - rr} h8 M${q.x + rr} ${q.y - rr - 10} v-8"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
@@ -1300,6 +1328,19 @@ function fxDraw() {
     }
     const pick = /\bpd\b/.test(n.bf || "") ? "⊓" : /\bpu\b/.test(n.bf || "") ? "V" : "";
     if (pick) h += `<text class="fx-pick" x="${q.x - rr - 9}" y="${q.y - rr + 2}">${pick}</text>`;
+  }
+  // the next note is coming (a gap before it): a ring closes in on where the finger goes, landing when it's played
+  const d0 = P.tab, nb = d0 && d0.beats[lastAt(d0.beats, t, (b) => b[0]) + 1];
+  if (nb && nb[3].length) {
+    const lead = nb[0] - t, curEnd = FX.notes.length ? Math.max(...FX.notes.map((n) => n.t0 + n.dur)) : -1e9, gapBefore = nb[0] - curEnd;
+    if (lead > 0 && lead < 0.9 && gapBefore > 0.3) {
+      const k = 1 - lead / 0.9;  // 0 -> 1 as it comes
+      for (const [st, f, fl] of nb[3]) {
+        if (st >= geo.strings || fl.includes("t") || fl.includes("x")) continue;
+        const x = f > 0 ? fretX(geo, f) : geo.left - 20, y = geo.sy(st), r = (geo.r + 5) * (1 + 1.4 * (1 - k));
+        h += `<circle class="fx-incoming" style="stroke:${strColor(st)}" cx="${x}" cy="${y}" r="${r.toFixed(1)}" opacity="${(0.25 + 0.65 * k).toFixed(2)}"/>`;
+      }
+    }
   }
   FX.trails = FX.trails.filter((p) => now - p.at < 220);  // fast fade
   trail.innerHTML = FX.trails.map((p) => { const a = 1 - (now - p.at) / 220;
@@ -1350,7 +1391,7 @@ function setTView(v) {
   $("#tabstrip").classList.toggle("off", v === "highway");
   if (v === "tab") { layoutTab(); drawTab(); }
 }
-document.addEventListener("click", (e) => { const b = e.target.closest("[data-tview]"); if (b) setTView(b.dataset.tview); });
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-tview]"); if (b) { if (document.body.classList.contains("sheet-mode")) setSheet(false); setTView(b.dataset.tview); } });
 $("#highway").classList.remove("hidden");
 setTView(TVIEW);
 
@@ -1561,7 +1602,7 @@ function setSheet(on) {
   document.body.classList.toggle("sheet-mode", on);
   $("#sheet").classList.toggle("hidden", !on);
   $("#pl-chords").classList.toggle("on", on);
-  $("#pl-chords").textContent = on ? "Back to the tab" : "Song chords";
+  document.querySelectorAll("[data-tview]").forEach((b) => b.classList.toggle("on", !on && b.dataset.tview === TVIEW));
   if (on) buildSheet();
 }
 // lyric lines with their start time in TAB time: the tab's own words, or LRCLIB lines (recording time + sync shift)
@@ -1745,7 +1786,7 @@ setInterval(() => {
 async function setParty(on) {
   document.body.classList.toggle("party-mode", on);
   $("#party").classList.toggle("hidden", !on);
-  $("#pl-party").textContent = on ? "Back to one guitar" : "Party: all guitars";
+  $("#pl-party").textContent = on ? "Back to one guitar" : "All"; $("#pl-party").classList.toggle("on", on);
   if (!on || !usingTab()) return;
   const d = P.tab, parts = d.tracks.slice().sort((a, b) => (b.played || 0) - (a.played || 0)).slice(0, 4);
   $("#party").innerHTML = parts.map((t) => `<div class="party-part" data-pi="${t.i}">

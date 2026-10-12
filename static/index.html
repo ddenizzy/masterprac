@@ -21,10 +21,14 @@
       <button class="tab win" data-tab="settings">Settings</button>
     </nav>
     <div class="status">
+      <button class="pill pill-btn" id="pl-practice" title="Pick a song: MasterPrac plays it itself, exactly in sync with the tab">Practice a song</button>
+      <button class="pill pill-btn" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
       <span class="pill" id="pill-sound" title="Where the Mac's sound plays">Sound</span>
       <span class="pill" id="pill-spotify" title="Spotify while you practise">Spotify</span>
     </div>
   </header>
+
+  <div class="hidden"><span id="pl-out"></span><button id="pl-options"></button><button id="pl-open" disabled></button></div>
 
   <!-- SONGSTERR: a real browser sits over #browser-area (placed by the app) -->
   <section class="view win hidden" id="view-songsterr">
@@ -48,22 +52,6 @@
         <div class="pl-title"><b id="pl-title">Play a song in any app</b><span id="pl-artist">Spotify, YouTube, Apple Music... MasterPrac follows it.</span></div>
         <div class="pl-time"><button class="ghost icon play-btn" id="pl-playbtn" title="Play / pause (Spotify follows)">&#9654;</button><span id="pl-pos">0:00</span><div class="pl-bar"><i id="pl-fill"></i></div><span id="pl-dur">0:00</span></div>
       </div>
-      <div class="seg pl-mode">
-        <button class="seg-b on" data-mode="jam" title="Make up your own part: the chords and the notes that sound good">Jam</button>
-        <button class="seg-b" data-mode="learn" title="Copy the guitarist: the exact string and fret, note by note">Learn the part</button>
-      </div>
-      <div class="pl-actions">
-        <span class="out-icon" id="pl-out" title="Where the sound plays now"></span>
-        <button class="ghost" id="pl-practice" title="Pick a song: MasterPrac plays it itself, exactly in sync with the tab">Practice a song</button>
-        <button class="ghost" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button>
-        <button class="ghost" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
-        <details class="dd more"><summary>More</summary><div class="dd-menu right">
-          <button class="chip-t" id="pl-party" title="Every guitar part of the song at once">Party: all guitars</button>
-          <button class="chip-t" id="pl-options">Settings</button>
-          <div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div>
-          <button class="chip-t" id="pl-open" disabled>Open in Songsterr &#8599;</button>
-        </div></details>
-      </div>
     </div>
 
     <div class="practice-bar hidden" id="practice-bar">
@@ -84,15 +72,16 @@
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
 
-    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button></div>
+    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button><button class="seg-b" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button></div>
       <span class="tab-rest hidden" id="tab-rest"></span>
       <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE TAB</span><button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
         <button class="chip-t" data-tshow="chords" title="Chord names above the tab">Chords</button>
         <button class="chip-t" data-tshow="reps" title="Write out every strum of the same chord again (off: a light line, numbers only when the chord changes)">Repeated strums: numbers</button>
         <button class="chip-t" data-tshow="held" title="Notes still ringing from before, shown as (3): you don't pick them again">Held notes</button>
-        <button class="chip-t" data-tshow="muted" title="Muted, scratchy notes (x)">Muted notes</button>
+        <button class="chip-t" data-tshow="muted" title="Muted, scratchy hits: a grey line across the strings">Muted notes</button>
+        <button class="chip-t" data-tshow="strum" title="Arrows under the tab: strum down (thick to thin string) or up">Strum arrows</button>
         <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button></div></details>
-      <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
+      <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><button class="part-b all-b" id="pl-party" title="Every guitar part of the song at once (party mode)">All</button><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
       <span class="tab-sync hidden" id="tab-sync"></span>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
       <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
@@ -118,6 +107,10 @@
     </div></details>
 
     <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
+      <div class="seg pl-mode">
+        <button class="seg-b on" data-mode="jam" title="Make up your own part: the chords and the notes that sound good">Jam</button>
+        <button class="seg-b" data-mode="learn" title="Copy the guitarist: the exact string and fret, note by note">Learn the part</button>
+      </div>
       <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE FRETBOARD</span><button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
         <button class="chip-t" data-show="next" title="The notes coming up next (dashed)"><i class="dot next"></i>Next</button>
         <button class="chip-t" data-show="chord" title="Notes of the chord playing now (green): land on these"><i class="dot chord"></i>Chord notes</button>
@@ -162,6 +155,7 @@
     </section>
 
     <section class="o-sec"><h4>Play page</h4>
+      <div class="o-row"><span>Look</span><div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div></div>
       <label class="o-switch"><input type="checkbox" id="o-showboxes"><i></i><span>Show the chord now / next / where boxes</span></label>
       <label class="o-switch"><input type="checkbox" id="o-showkey"><i></i><span>Show the key box</span></label>
       <label class="o-switch"><input type="checkbox" id="o-autohide" checked><i></i><span>Hide the top bars when I'm not using them <em>(move the mouse to the top to see them)</em></span></label>
