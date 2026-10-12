@@ -559,75 +559,35 @@ const SYNC = { on: true, samples: [], last: 0, state: "", score: 0 };
 try { SYNC.on = localStorage.getItem("pl-autosync") !== "off"; } catch (e) { /* fine */ }
 $("#o-autosync").checked = SYNC.on;
 const cos = (a, b) => { let d = 0, na = 0, nb = 0; for (let i = 0; i < 12; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return na && nb ? d / Math.sqrt(na * nb) : 0; };
+// every 2.5 s the server listens to the last ~20 s and compares it with the tab (sync.py): notes to get close,
+// then the attacks of every instrument (drums, bass, guitars) to within ~10 ms
 async function syncListen() {
-  if (tab !== "play" || !SYNC.on || !usingTab() || !P.tab.print || !(P.info && P.info.playing)) return;
+  if (tab !== "play" || !SYNC.on || !usingTab() || !(P.info && P.info.playing) || SYNC.busy) return;
+  SYNC.busy = true;
   let d;
-  try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
-  if (!d.live) { syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); } return; }
-  if (d.rms < 0.004) return;
-  const raw = playerPos() - 0.2;  // the sound analysed is ~0.2 s old (and not yet through the speakers)
-  SYNC.samples.push({ t: raw, c: d.chroma });
-  SYNC.samples = SYNC.samples.filter((x) => raw - x.t < 30 && x.t <= raw);
-  if (performance.now() - SYNC.last > 3000 && SYNC.samples.length >= 40) { SYNC.last = performance.now(); syncSolve(); }
-  else if (!SYNC.state) syncStatus("Listening to sync...");
-}
-setInterval(syncListen, 150);
-function syncSolve() {
-  // also try the tab moved into every key: Songsterr tabs are sometimes in another key than the recording (capo, cover)
-  const pr = P.tab.print, step = P.tab.print_step;
-  let scores = [], bestShift = 0, bestOf = -1;
-  for (let r = 0; r < 12; r++) {
-    const sc = [];
-    for (let o = -10; o <= 10.001; o += 0.25) {
-      let sum = 0, n = 0;
-      for (const x of SYNC.samples) {
-        const slot = pr[Math.round((x.t + o) / step)];
-        if (!slot || !slot.some((v) => v)) continue;
-        sum += cos(x.c, r ? slot.map((_, i) => slot[(i - r + 12) % 12]) : slot); n++;
-      }
-      if (n > SYNC.samples.length * 0.5) sc.push({ o: Math.round(o * 100) / 100, s: sum / n });
-    }
-    sc.sort((a, b) => b.s - a.s);
-    // the tab's own key wins unless another key is clearly better
-    if (sc.length && sc[0].s > bestOf + (r ? 0.05 : 0)) { bestOf = sc[0].s; scores = sc; bestShift = r; }
-  }
-  if (!scores.length) return;
-  // fine-tune around the best step: 0.05 s steps, reading the fingerprint between its slots
-  const at = (k) => { const a = pr[Math.floor(k)], b = pr[Math.ceil(k)]; if (!a || !b) return a || b; const f = k - Math.floor(k); return a.map((v, i) => v * (1 - f) + b[i] * f); };
-  const rot = (sl) => bestShift ? sl.map((_, i) => sl[(i - bestShift + 12) % 12]) : sl;
-  let fine = scores[0];
-  for (let o = scores[0].o - 0.3; o <= scores[0].o + 0.301; o += 0.05) {
-    let sum = 0, n = 0;
-    for (const x of SYNC.samples) { const sl = at((x.t + o) / step); if (!sl || !sl.some((v) => v)) continue; sum += cos(x.c, rot(sl)); n++; }
-    if (n && sum / n > fine.s) fine = { o: Math.round(o * 100) / 100, s: sum / n };
-  }
-  scores[0] = fine;
-  const best = scores[0], median = scores[Math.floor(scores.length / 2)].s;
-  SYNC.score = best.s;
-  if (bestShift !== (SYNC.shift || 0) && best.s > 0.5) {
-    SYNC.shift = bestShift;
-    const up = bestShift <= 6 ? bestShift : bestShift - 12;
-    SYNC.keyNote = bestShift ? `<b>This recording is ${Math.abs(up)} half-step${Math.abs(up) > 1 ? "s" : ""} ${up > 0 ? "higher" : "lower"} than the tab.</b> ${up > 0 ? `Put a capo on fret ${up} and play the tab as written.` : `Tune down ${-up} half-step${up < -1 ? "s" : ""} to play along.`}` : "";
+  try { d = await (await fetch(`/api/sync/${P.tab.song_id}`)).json(); } catch (e) { SYNC.busy = false; return; }
+  SYNC.busy = false;
+  if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); }
+  const r = d.result;
+  if (!r) { if (SYNC.state !== "locked") syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); return; }
+  SYNC.score = r.note_score;
+  const sure = r.note_score > 0.4 && r.note_conf > 0.12;
+  if (!sure) { if (SYNC.state !== "locked") syncStatus("Listening to sync... (not sure yet)"); return; }
+  const target = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  if (r.shift !== (SYNC.shift || 0)) {
+    SYNC.shift = r.shift;
+    const up = r.shift <= 6 ? r.shift : r.shift - 12;
+    SYNC.keyNote = r.shift ? `<b>This recording is ${Math.abs(up)} half-step${Math.abs(up) > 1 ? "s" : ""} ${up > 0 ? "higher" : "lower"} than the tab.</b> ${up > 0 ? `Put a capo on fret ${up} and play the tab as written.` : `Tune down ${-up} half-step${up < -1 ? "s" : ""} to play along.`}` : "";
     headsUp();
   }
-  // stick with the current timing unless the new one is clearly better (no jumping back and forth)
-  const here = scores.find((x) => Math.abs(x.o - P.offset) < 0.13 && x !== best) || (Math.abs(best.o - P.offset) < 0.13 ? best : null);
-  if (SYNC.state === "locked" && here && best.s - here.s < 0.03) {
-    syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
-    return;
+  if (Math.abs(target - P.offset) >= 0.03) {  // small wobbles are ignored, real changes are followed
+    P.offset = Math.round(target * 100) / 100; showOffset(); P.sig = "";
+    if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
   }
-  if (best.s > 0.5 && best.s - median > 0.06) {  // a clear winner: use it
-    if (Math.abs(best.o - P.offset) >= 0.05) {
-      P.offset = best.o; showOffset(); P.sig = "";
-      if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
-    }
-    SYNC.state = "locked";
-    syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
-  } else {
-    SYNC.state = "";
-    syncStatus("Listening to sync... (not sure yet)");
-  }
+  SYNC.state = "locked";
+  syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s${r.attack_conf >= 1.8 ? " · precise" : ""}`, true);
 }
+setInterval(syncListen, 2500);
 function syncStatus(text, ok) {
   const el = $("#tab-sync");
   el.textContent = text; el.classList.toggle("ok", !!ok); el.classList.toggle("hidden", !SYNC.on || !usingTab());

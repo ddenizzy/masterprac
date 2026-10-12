@@ -189,6 +189,25 @@ def _fingerprint(tracks, times):
     return out
 
 
+def _attacks(tracks, times):
+    """When notes START in the whole band (guitars, bass, keys, drums), with a weight per moment: drums count most,
+    they mark the beat. MasterPrac matches these against the attacks it hears to sync to within ~10 ms."""
+    hits = {}
+    for tr, w in tracks:
+        for (start, stop), m in zip(times, tr["measures"]):
+            for v in m.get("voices", [])[:1]:
+                pos, beats = 0.0, v.get("beats", [])
+                total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1
+                for b in beats:
+                    frac = b["duration"][0] / b["duration"][1] / total
+                    new = [n for n in b.get("notes", []) if not n.get("rest") and not n.get("tie")]
+                    if new:
+                        t = round(start + pos * (stop - start), 2)
+                        hits[t] = hits.get(t, 0) + w * min(3, len(new))
+                    pos += frac
+    return sorted([t, round(x, 1)] for t, x in hits.items())
+
+
 def _written_chords(tracks, n_bars):
     """Chord names the tab's author wrote above the music (first one per bar), or None if there are few."""
     out = [""] * n_bars
@@ -316,7 +335,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v13-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v14-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -371,6 +390,9 @@ def load(song_id, lead_index=None):
         "print": _fingerprint([lt] + harmony + ([bass] if bass else []), times),
         "lyrics": _lyrics([get(i) for i, t in enumerate(tracks) if re.search(r"vocal|voice|sing", (t.get("name") or "") + " " + (t.get("instrument") or ""), re.I)][:2], times),
         "print_step": STEP,
+        "attacks": _attacks([(get(i), 2.0 if "drum" in (t.get("instrument") or "").lower() else 1.0)
+                             for i, t in enumerate(tracks) if re.search(r"guitar|bass|drum|piano|organ|keys",
+                                                                        (t.get("instrument") or "") + " " + (t.get("name") or ""), re.I)][:8], times),
         "tuning_name": tuning_name(tuning),
         "tempo": next((a["bpm"] for a in lt.get("automations", {}).get("tempo", [])), None),
         "key": None,

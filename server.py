@@ -176,6 +176,27 @@ def now():
     return jsonify(p)
 
 
+@app.get("/api/sync/<int:song_id>")
+def sync_now(song_id):
+    """Listen to the last ~20 s and work out where the tab is vs the recording (see sync.py)."""
+    import listen
+    import sync
+    import tabs
+    import time
+    listen.listen()  # keep MasterPrac's ears on while the page asks
+    try:
+        tab = tabs.load(song_id, request.args.get("lead", type=int))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+    p = h.now_playing()
+    if not p.get("title"):
+        return jsonify({"result": None, "why": "nothing playing"})
+    pos_at = lambda c: p["pos"] + ((c - p["at"]) if p["playing"] else 0)
+    t0 = time.time()
+    r = sync.solve(tab, pos_at)
+    return jsonify({"result": r, "took": round(time.time() - t0, 2), "error": listen.notes().get("error")})
+
+
 @app.get("/api/now/versions")
 def now_versions():
     """Every Songsterr version of the playing song, with what's in it, to choose from."""

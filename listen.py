@@ -30,11 +30,31 @@ def set_rate(rate):
 set_rate(48000)
 
 
+RECENT = 25  # seconds of sound kept for syncing (with the clock time of the newest sample)
+_rec = {"buf": np.zeros(48000 * RECENT, np.float32), "n": 0, "t": 0.0}
+
+
 def _feed(new):
+    now = time.time()
     with _lock:
         ring = np.roll(_state["ring"], -len(new))
         ring[-min(len(new), LONG):] = new[-LONG:]
-        _state["ring"], _state["at"] = ring, time.time()
+        _state["ring"], _state["at"] = ring, now
+        buf, k = _rec["buf"], len(new)
+        if k >= len(buf):
+            buf[:] = new[-len(buf):]
+        else:
+            buf[:-k] = buf[k:]
+            buf[-k:] = new
+        _rec["n"] = min(len(buf), _rec["n"] + k)
+        _rec["t"] = now
+
+
+def recent(seconds):
+    """The last `seconds` of sound (mono floats) + the clock time of its newest sample + the sample rate."""
+    with _lock:
+        n = min(_rec["n"], int(seconds * RATE), len(_rec["buf"]))
+        return _rec["buf"][len(_rec["buf"]) - n:].copy(), _rec["t"], RATE
 
 
 _start_lock = threading.Lock()
@@ -64,6 +84,7 @@ def _start():
         set_rate(int(first.split()[1]))
     except (IndexError, ValueError):
         pass
+    _rec.update(buf=np.zeros(int(RATE * RECENT), np.float32), n=0, t=0.0)
 
     def read():
         while True:
