@@ -97,23 +97,44 @@
     <div class="pl-foot" id="pl-foot"></div>
   </section>
 
+  <button class="exit-full" id="pl-exitfull" title="Show everything again (Esc)">Show everything</button>
+
   <!-- pop-ups -->
-  <div class="pop hidden" id="pop-options"><div class="pop-card">
+  <div class="pop hidden" id="pop-options"><div class="pop-card opts">
     <div class="pop-head"><b>Options</b><button class="ghost icon" data-close>&#10005;</button></div>
-    <label>Look <select id="o-look"><option value="classic">Classic (wood and paper)</option><option value="neon">Neon (Guitar Hero style)</option></select></label>
-    <label>String colours (Neon) <select id="o-strings"><option value="two">Two colours, every other string (easier)</option><option value="each">A colour for each string (Guitar Hero)</option></select></label>
-    <label>Notes on the fretboard <select id="o-scale">
-      <option value="pent">The 5 safest (pentatonic)</option><option value="full">All 7 notes of the key</option>
-      <option value="blues">Bluesy (pentatonic + blue note)</option><option value="chord">Only the chord playing now</option></select></label>
-    <p class="explain" id="o-scale-help"></p>
-    <label>Dots show <select id="o-labels"><option value="names">Note names (A, C#)</option><option value="intervals">Note jobs (R = home, b3 = sad note, 5 = strong note)</option></select></label>
-    <label>Part of the neck <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1 (one hand position, learn this first)</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
-    <label>Chords come from <select id="o-src"><option value="tab">The song's tab (exact)</option><option value="ear">Listening (by ear)</option></select></label>
-    <label class="o-check"><input type="checkbox" id="o-mute"> Mute Spotify while I practise (it keeps playing, so your listening counts)</label>
-    <label class="o-check"><input type="checkbox" id="o-autosync" checked> Sync the tab to the music by listening (automatic)</label>
-    <div class="o-row"><span>Timing: chords or notes early/late?</span>
-      <button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></div>
-    <div class="o-row"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
+
+    <section class="o-sec"><h4>Look</h4>
+      <div class="o-item"><span class="o-label">Style</span>
+        <select id="o-look"><option value="classic">Classic</option><option value="neon">Neon</option></select></div>
+      <div class="o-item"><span class="o-label">String colours</span>
+        <select id="o-strings"><option value="off">Off</option><option value="two">Two colours</option><option value="each">Each string</option></select></div>
+      <p class="o-help">Two colours alternate strings (easy to follow); each string is Guitar Hero style.</p>
+    </section>
+
+    <section class="o-sec"><h4>Fretboard</h4>
+      <div class="o-item"><span class="o-label">Notes</span>
+        <select id="o-scale"><option value="pent">5 safest</option><option value="full">All 7 of the key</option><option value="blues">Bluesy</option><option value="chord">Only the chord now</option></select></div>
+      <p class="o-help" id="o-scale-help"></p>
+      <div class="o-item"><span class="o-label">Dots show</span>
+        <select id="o-labels"><option value="names">Note names</option><option value="intervals">Note jobs (R, b3, 5)</option></select></div>
+      <div class="o-item"><span class="o-label">Part of the neck</span>
+        <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></div>
+      <p class="o-help">A box is one hand position (about 4 frets). Learn Box 1 first.</p>
+    </section>
+
+    <section class="o-sec"><h4>Song &amp; timing</h4>
+      <div class="o-item"><span class="o-label">Chords from</span>
+        <select id="o-src"><option value="tab">The tab (exact)</option><option value="ear">Listening</option></select></div>
+      <label class="o-switch"><input type="checkbox" id="o-autosync" checked><i></i><span>Sync the tab to the music by listening</span></label>
+      <div class="o-item"><span class="o-label">Early / late?</span>
+        <span class="o-nudge"><button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></span></div>
+    </section>
+
+    <section class="o-sec"><h4>Sound</h4>
+      <label class="o-switch"><input type="checkbox" id="o-mute"><i></i><span>Mute Spotify while I practise <em>(it keeps playing, so your listening counts)</em></span></label>
+    </section>
+
+    <div class="o-links"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
   </div></div>
   <div class="pop hidden" id="pop-versions"><div class="pop-card wide">
     <div class="pop-head"><b>Which tab of this song?</b><button class="ghost icon" data-close>&#10005;</button></div>

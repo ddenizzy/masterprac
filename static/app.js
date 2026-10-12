@@ -9,6 +9,25 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const api = () => { const a = window.pywebview && window.pywebview.api; return a && typeof a.browser_place === "function" ? a : null; };
 let tab = "songsterr";
 
+// every dropdown in the app as pill buttons: the <select> stays (hidden) and keeps working; clicks set it
+function pillify(sel) {
+  if (sel._pills) return;
+  const box = document.createElement("span");
+  box.className = "pills"; sel._pills = box; sel.classList.add("pilled");
+  sel.after(box);
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (!b || sel.value === b.dataset.v) return;
+    sel.value = b.dataset.v; sel.dispatchEvent(new Event("change")); syncPills();
+  });
+  new MutationObserver(() => syncPills()).observe(sel, { childList: true });
+}
+function syncPills() {
+  document.querySelectorAll("select.pilled").forEach((sel) => {
+    const html = [...sel.options].map((o) => `<button type="button" class="pill-b ${o.value === sel.value ? "on" : ""}" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("");
+    if (sel._pills._html !== html) { sel._pills.innerHTML = html; sel._pills._html = html; }
+  });
+}
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden");
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), 2600);
@@ -280,10 +299,10 @@ async function loadTab(id, track) {
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
   $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
-  // up to 4 parts: big buttons (the one you follow filled in); more: a big dropdown
-  const many = d.tracks.length > 4;
-  $("#tab-part").classList.toggle("hidden", !many);
-  $("#part-btns").innerHTML = many ? "" : d.tracks.map((t) => `<button class="part-b ${t.i === d.lead ? "on" : ""}" data-part="${t.i}"
+  // one big button per guitar part (the one you follow filled in); many parts scroll sideways
+  $("#tab-part").classList.add("hidden");
+  $("#part-btns").classList.toggle("many", d.tracks.length > 4);
+  $("#part-btns").innerHTML = d.tracks.map((t) => `<button class="part-b ${t.i === d.lead ? "on" : ""}" data-part="${t.i}"
     title="${esc(t.name)}">${esc(partName(t))}${t.played != null ? `<i>${t.played}/${d.bars.length}</i>` : ""}</button>`).join("");
   P.lrc = []; P.lyBarIdx = undefined;
   drawTab(); buildMap(); headsUp(); drawPlayBoard();
@@ -687,6 +706,7 @@ document.addEventListener("click", (e) => {
   }
   if (b.id === "pl-options") openPop("#pop-options");
   if (b.id === "pl-full") setFull(!document.body.classList.contains("pl-focus"));
+  if (b.id === "pl-exitfull") setFull(false);
   if (b.dataset.show) {
     show()[b.dataset.show] = !show()[b.dataset.show];
     try { localStorage.setItem("pl-show", JSON.stringify(SHOW)); } catch (x) { /* fine */ }
@@ -908,10 +928,12 @@ function fxBeat(d, bt, bnow) {
   FX.beat = bt;
   if (!bnow) { FX.notes = []; return; }
   const [t0, dur] = bnow, after = d.beats.slice(bt + 1).find((b) => b[3].length);
+  const before = FX.notes || [];
   FX.notes = bnow[3].filter((n) => !n[2].includes("t")).map(([s, f, fl]) => {
     const to = after && after[3].find((n) => n[0] === s);
+    const again = before.some((b) => b.s === s && b.f === f);  // the same note picked again
     const prev = FX.last[s] ?? Object.values(FX.last).sort((a, b) => b.t - a.t)[0];
-    return { s, f, fl, t0, dur: Math.max(0.08, dur), to: to ? to[1] : null,
+    return { s, f, fl, t0, dur: Math.max(0.08, dur), to: to ? to[1] : null, again, pickedAt: performance.now(),
       from: prev && t0 - prev.t < 0.8 ? prev : null };  // where the finger comes from (for the fast flight)
   });
 }
@@ -960,6 +982,15 @@ function fxDraw() {
       const a = Math.max(0, 1 - Math.max(0, (t - n.t0) / Math.max(0.25, n.dur)));
       h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
     }
+    const since = (now - n.pickedAt) / 1000, col = getComputedStyle(document.body).getPropertyValue(`--s${n.s}`).trim() || "#ffd27a";
+    if (since < 0.3 && !n.fl.includes("x")) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
+      const amp = (n.again ? 4.5 : 3) * (1 - since / 0.3), y0 = geo.sy(n.s);
+      let path = `M${geo.left} ${y0}`;
+      for (let x = geo.left; x <= geo.x2; x += 8) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 11 + since * 90) * amp).toFixed(1)}`;
+      h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${(1 - since / 0.3).toFixed(2)}"/>`;
+      const rg = (geo.r + 5) * (1 + since * (n.again ? 4 : 2.5));
+      h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.3)).toFixed(2)}"/>`;
+    }
     const rr = q.fret === 0 ? geo.r : geo.r + 5;  // smaller by the nut, so it never covers the string names
     h += `<g class="note play s${n.s}" opacity="${q.fade.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${rr}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
   }
@@ -974,15 +1005,16 @@ requestAnimationFrame(fxFrame);
 function setLook(look) {
   document.body.classList.toggle("neon", look === "neon");
   try { localStorage.setItem("mp-look", look); } catch (e) { /* fine */ }
-  $("#o-look").value = look;
+  $("#o-look").value = look; syncPills();
   document.querySelectorAll("[data-look]").forEach((b) => b.classList.toggle("on", b.dataset.look === look));
 }
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-look]"); if (b) setLook(b.dataset.look); });
 // string colours: two alternating (easier on the eyes) or one per string (Guitar Hero)
 function setStrings(v) {
-  document.body.classList.toggle("two-colors", v !== "each");
+  document.body.classList.toggle("str-two", v === "two");
+  document.body.classList.toggle("str-each", v === "each");
   try { localStorage.setItem("mp-strings", v); } catch (e) { /* fine */ }
-  $("#o-strings").value = v;
+  $("#o-strings").value = v; syncPills();
 }
 try { setStrings(localStorage.getItem("mp-strings") || "two"); } catch (e) { setStrings("two"); }
 $("#o-strings").addEventListener("change", (e) => setStrings(e.target.value));
@@ -1015,8 +1047,8 @@ document.addEventListener("click", (e) => { const b = e.target.closest("[data-tv
 $("#highway").classList.remove("hidden");
 setTView(TVIEW);
 
-const LANE_EACH = ["#c27bff", "#ff9a3b", "#3bb8ff", "#ffe23b", "#ff3b5c", "#39ff88"];  // high E ... low E
-const laneColor = (s) => document.body.classList.contains("two-colors") ? (s % 2 ? "#ff2bd6" : "#22e6ff") : LANE_EACH[s] || "#fff";
+// lane colours = the string colours (Options); with colours off, every lane is violet
+const laneColor = (s) => getComputedStyle(document.body).getPropertyValue(`--s${s}`).trim() || "#9b5cff";
 const AHEAD = 2.6;  // seconds of song visible on the highway
 function hwDraw() {
   if (tab !== "play" || TVIEW !== "highway" || !usingTab()) return;
@@ -1053,7 +1085,7 @@ function hwDraw() {
   }
   c.globalAlpha = 1;
   // the hit line + a target ring per lane
-  c.shadowBlur = 18; c.shadowColor = "#ff2bd6"; c.strokeStyle = "#ff2bd6"; c.lineWidth = 3;
+  c.shadowBlur = 18; c.shadowColor = "#9b5cff"; c.strokeStyle = "#9b5cff"; c.lineWidth = 3;
   c.beginPath(); c.moveTo(cx - near / 2, hitY); c.lineTo(cx + near / 2, hitY); c.stroke(); c.shadowBlur = 0;
   for (let l = 0; l < lanes; l++) {
     const s = lanes - 1 - l;
@@ -1117,3 +1149,6 @@ $("#o-mute").addEventListener("change", async (e) => {
   toast(r.message || (r.mute_spotify ? "Spotify will be muted while you practise" : "Spotify keeps playing"));
   refresh();
 });
+
+document.querySelectorAll("#pop-options select").forEach(pillify);
+syncPills();
