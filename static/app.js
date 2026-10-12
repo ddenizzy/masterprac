@@ -250,7 +250,7 @@ async function loadTab(id, track) {
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
   if (P.songId !== id) return;  // the song changed meanwhile
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
-  SYNC.samples = []; SYNC.state = "";
+  SYNC.samples = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
@@ -407,6 +407,7 @@ const TECH = { b: "bends", s: "slides", h: "hammer-ons / pull-offs", x: "muted (
 function headsUp(extra) {
   const out = [], d = usingTab() ? P.tab : null;
   if (extra) out.push(extra);
+  if (d && SYNC.keyNote) out.push(SYNC.keyNote);
   if (d) {
     const bi = Math.max(0, P.barIdx);
     if (JSON.stringify(d.tuning) !== JSON.stringify(STD)) out.push(`<b>Tuning: ${esc(d.tuning_name)}</b>: tune your guitar to this first.`);
@@ -518,20 +519,33 @@ async function syncListen() {
 }
 setInterval(syncListen, 150);
 function syncSolve() {
-  const pr = P.tab.print, step = P.tab.print_step, scores = [];
-  for (let o = -10; o <= 10.001; o += 0.25) {
-    let sum = 0, n = 0;
-    for (const x of SYNC.samples) {
-      const slot = pr[Math.round((x.t + o) / step)];
-      if (!slot || !slot.some((v) => v)) continue;
-      sum += cos(x.c, slot); n++;
+  // also try the tab moved into every key: Songsterr tabs are sometimes in another key than the recording (capo, cover)
+  const pr = P.tab.print, step = P.tab.print_step;
+  let scores = [], bestShift = 0, bestOf = -1;
+  for (let r = 0; r < 12; r++) {
+    const sc = [];
+    for (let o = -10; o <= 10.001; o += 0.25) {
+      let sum = 0, n = 0;
+      for (const x of SYNC.samples) {
+        const slot = pr[Math.round((x.t + o) / step)];
+        if (!slot || !slot.some((v) => v)) continue;
+        sum += cos(x.c, r ? slot.map((_, i) => slot[(i - r + 12) % 12]) : slot); n++;
+      }
+      if (n > SYNC.samples.length * 0.5) sc.push({ o: Math.round(o * 100) / 100, s: sum / n });
     }
-    if (n > SYNC.samples.length * 0.5) scores.push({ o: Math.round(o * 100) / 100, s: sum / n });
+    sc.sort((a, b) => b.s - a.s);
+    // the tab's own key wins unless another key is clearly better
+    if (sc.length && sc[0].s > bestOf + (r ? 0.05 : 0)) { bestOf = sc[0].s; scores = sc; bestShift = r; }
   }
   if (!scores.length) return;
-  scores.sort((a, b) => b.s - a.s);
   const best = scores[0], median = scores[Math.floor(scores.length / 2)].s;
   SYNC.score = best.s;
+  if (bestShift !== (SYNC.shift || 0) && best.s > 0.5) {
+    SYNC.shift = bestShift;
+    const up = bestShift <= 6 ? bestShift : bestShift - 12;
+    SYNC.keyNote = bestShift ? `<b>This recording is ${Math.abs(up)} half-step${Math.abs(up) > 1 ? "s" : ""} ${up > 0 ? "higher" : "lower"} than the tab.</b> ${up > 0 ? `Put a capo on fret ${up} and play the tab as written.` : `Tune down ${-up} half-step${up < -1 ? "s" : ""} to play along.`}` : "";
+    headsUp();
+  }
   if (best.s > 0.5 && best.s - median > 0.06) {  // a clear winner: use it
     if (Math.abs(best.o - P.offset) >= 0.25) {
       P.offset = best.o; showOffset(); P.sig = "";

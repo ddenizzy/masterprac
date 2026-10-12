@@ -206,6 +206,7 @@ def clean_song(title, artist):
     t = re.sub(r"\s*\|.*$|\s+-\s+YouTube$", "", t).strip()
     # Spotify's " - Remastered 2009", " - 2011 Remaster", " - Live", " - Single Version", " - Mono"...
     t = re.sub(r"\s+-\s+[^-]*\b(remaster(ed)?|live|version|mono|stereo|edit|mix|demo|acoustic)\b[^-]*$", "", t, flags=re.I).strip()
+    t = re.sub(r"\s+-\s+(19|20)\d\d$", "", t).strip()  # " - 2011"
     a = re.sub(r"\s*-\s*Topic$|VEVO$|\s*Official$", "", a, flags=re.I).strip()
     m = re.match(r"^(.+?)\s+[-–—]\s+(.+)$", t)
     if m and (not a or _norm(m.group(1)) in _norm(a) or _norm(a) in _norm(m.group(1))):
