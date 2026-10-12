@@ -1704,3 +1704,40 @@ setInterval(() => {
   }
 }, 80);
 document.addEventListener("click", (e) => { const b = e.target.closest("#pl-party"); if (b) setParty(!document.body.classList.contains("party-mode")); });
+
+/* practice: learn one section at a time (like a lesson): click a part to loop it; click again to stop */
+function tabToVideo(t) {
+  const d = P.tab, pts = PR.vid && PR.vid.points;
+  if (!d || !pts) return t;
+  const i = Math.max(0, Math.min(lastAt(d.bars, t, (b) => b.t), pts.length - 2)), bar = d.bars[i];
+  return pts[i] + ((t - bar.t) / Math.max(0.01, bar.end - bar.t)) * (pts[i + 1] - pts[i]);
+}
+function prSections() {
+  const d = P.tab;
+  if (!d || d.error) return;
+  const secs = [];
+  d.bars.forEach((b, i) => { if (b.section) secs.push({ name: b.section, from: b.t, i }); });
+  secs.forEach((s, k) => { s.to = k + 1 < secs.length ? secs[k + 1].from : d.bars[d.bars.length - 1].end; });
+  PR.secs = secs;
+  $("#pr-secs").innerHTML = `<span class="kicker">LOOP A PART</span>` + secs.map((s, k) => `<button class="chip-t" data-loop="${k}">${esc(s.name)}</button>`).join("");
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-loop]");
+  if (!b || !PR.on || !PR.ready) return;
+  const k = Number(b.dataset.loop);
+  PR.loop = PR.loop === k ? null : k;
+  document.querySelectorAll("[data-loop]").forEach((x) => x.classList.toggle("on", Number(x.dataset.loop) === PR.loop));
+  if (PR.loop != null) { PR.yt.seekTo(tabToVideo(PR.secs[k].from), true); PR.yt.playVideo(); toast(`Looping ${PR.secs[k].name}. Click it again to stop`); }
+});
+setInterval(() => {  // the loop: back to the start of the part when it ends
+  if (!PR.on || !PR.ready || PR.loop == null) return;
+  const s = PR.secs[PR.loop];
+  if (playTime() >= s.to - 0.05) PR.yt.seekTo(tabToVideo(s.from), true);
+}, 60);
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#practice-lesson") || !api() || !P.info) return;
+  api().browser_go(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${P.info.title} ${P.info.artist} guitar lesson tab`)}`);
+  setTab("songsterr");
+});
+const _applyTabPr = applyTab;
+applyTab = function (d, keep) { _applyTabPr(d, keep); if (PR.on) prSections(); };  // eslint-disable-line no-func-assign

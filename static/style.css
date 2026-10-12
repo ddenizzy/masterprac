@@ -604,3 +604,6 @@ body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph, bod
 .party-head .sub { margin-left: auto; font-size: 12px; }
 .party-board { height: 190px; }
 .party-head .sub { font-family: "SF Mono", Menlo, monospace; letter-spacing: 1px; }
+
+.pr-secs { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pr-secs .chip-t.on { background: var(--accent); color: #1a1208; border-color: var(--accent); }
