@@ -194,6 +194,25 @@ def _np_lib():
     return lib
 
 
+_latency = {"at": 0.0, "value": 0.0}
+
+
+def output_latency():
+    """Seconds between the Mac sending sound and the speakers playing it (Bluetooth ~0.2 s). Checked every 10 s."""
+    if time.time() - _latency["at"] < 10:
+        return _latency["value"]
+    tool, src = TOOLS / "outlatency", TOOLS / "outlatency.swift"
+    try:
+        if not tool.exists() or tool.stat().st_mtime < src.stat().st_mtime:
+            subprocess.run(["swiftc", "-O", str(src), "-o", str(tool)], capture_output=True, timeout=300)
+        v = float(subprocess.run([str(tool)], capture_output=True, text=True, timeout=3).stdout.strip())
+        _latency["value"] = v if 0 <= v < 1 else 0.0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    _latency["at"] = time.time()
+    return _latency["value"]
+
+
 def _clean_app(name):
     """'Safari Graphics and Media' / 'Google Chrome Helper' -> 'Safari' / 'Google Chrome'."""
     return re.sub(r"\s+(Graphics and Media|Web Content|Networking|Helper.*)$", "", name or "").strip()
@@ -236,8 +255,15 @@ def now_playing():
         return {"playing": False, "title": ""}
     title, artist = clean_song(d["title"], d.get("artist", ""))
     pos = d.get("elapsed", 0) + (d.get("now", 0) - d.get("timestamp", 0)) * d.get("rate", 0)
-    return {"title": title, "artist": artist, "raw_title": d["title"], "app": _clean_app(d.get("app")),
-            "playing": d.get("rate", 0) > 0, "pos": round(pos, 3), "duration": d.get("duration", 0), "at": time.time()}
+    at = d.get("now") or time.time()
+    app = _clean_app(d.get("app"))
+    if app == "Spotify":  # macOS's Now Playing drifts (0.8 s behind after 3 min); Spotify's own clock doesn't
+        sp = spotify_position()
+        if sp.get("pos") is not None and sp.get("title") == d["title"]:
+            pos, at = sp["pos"], time.time()
+    return {"title": title, "artist": artist, "raw_title": d["title"], "app": app,
+            "playing": d.get("rate", 0) > 0, "pos": round(pos, 3), "duration": d.get("duration", 0), "at": at,
+            "latency": output_latency()}
 
 
 def songsterr_match(title, artist):

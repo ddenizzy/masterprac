@@ -106,6 +106,58 @@ def _tab_beats(track, times):
     return out
 
 
+def _lyrics(tracks_json, times):
+    """The sung words, each syllable at the moment its note is sung: [[t, "syl", new_line], ...].
+    Songsterr keeps them in the singer's track (Guitar Pro style): syllables split by spaces and '-', given out one
+    per sung note (rests and held/tied notes get none), starting at the line's 'offset' bar."""
+    for tr in tracks_json:
+        lines = [l for l in tr.get("newLyrics") or [] if (l.get("text") or "").strip()]
+        if not lines:
+            continue
+        line = lines[0]
+        text = re.sub(r"\[[^\]]*\]", "\n", line["text"])  # [Verse 1], [Chorus]: headings, not sung
+        tokens = []  # (syllable, starts a new line)
+        new_line = True
+        for raw_line in text.split("\n"):
+            if not raw_line.strip():
+                new_line = True
+                continue
+            # one space between words; every EXTRA space = one note sung without a new syllable (a held word)
+            pieces = raw_line.lstrip().split(" ")
+            for w in pieces:
+                if w == "":
+                    tokens.append(("", False))
+                    continue
+                parts = w.split("-")
+                for k, part in enumerate(parts):
+                    if part == "" and k:
+                        continue
+                    tokens.append((part + ("-" if k < len(parts) - 1 else ""), new_line))
+                    new_line = False
+            new_line = True
+        out, ti = [], 0
+        start_bar = max(0, int(line.get("offset", 1)) - 1)
+        for bi, ((s, e), m) in enumerate(zip(times, tr["measures"])):
+            if bi < start_bar:
+                continue
+            for v in m.get("voices", [])[:1]:
+                beats = v.get("beats", [])
+                total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1
+                pos = 0.0
+                for b in beats:
+                    frac = b["duration"][0] / b["duration"][1] / total
+                    sung = [n for n in b.get("notes", []) if not n.get("rest")]
+                    # grace notes (quick ornaments) and held/tied notes get no syllable
+                    if sung and not b.get("graceNote") and not all(n.get("tie") for n in sung) and ti < len(tokens):
+                        syl, nl = tokens[ti]
+                        if syl:  # an empty one = a held note: nothing new to sing
+                            out.append([round(s + pos * (e - s), 3), syl, nl])
+                        ti += 1
+                    pos += frac
+        return out
+    return []
+
+
 STEP = 0.25  # seconds per fingerprint slot
 
 
@@ -264,7 +316,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v10-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v13-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -317,6 +369,7 @@ def load(song_id, lead_index=None):
         "events": _events(lt, times),
         "beats": _tab_beats(lt, times),
         "print": _fingerprint([lt] + harmony + ([bass] if bass else []), times),
+        "lyrics": _lyrics([get(i) for i, t in enumerate(tracks) if re.search(r"vocal|voice|sing", (t.get("name") or "") + " " + (t.get("instrument") or ""), re.I)][:2], times),
         "print_step": STEP,
         "tuning_name": tuning_name(tuning),
         "tempo": next((a["bpm"] for a in lt.get("automations", {}).get("tempo", [])), None),

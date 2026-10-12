@@ -209,11 +209,14 @@ const P = { info: null, tab: null, songId: null, track: null, mode: "jam", src: 
   ear: { smooth: Array(12).fill(0), acc: Array(12).fill(0), chord: null, cand: null, since: 0, keyCand: null, keySince: 0 } };
 const STD = [64, 59, 55, 50, 45, 40];
 const usingTab = () => P.src === "tab" && P.tab && !P.tab.error;
-const playTime = () => {
+// where the player is right now (what it is SENDING to the speakers)
+const playerPos = () => {
   const p = P.info;
   if (!p || !p.title) return 0;
-  return p.pos + (p.playing ? Date.now() / 1000 - p.at : 0) + P.offset;
+  return p.pos + (p.playing ? Date.now() / 1000 - p.at : 0);
 };
+// where the tab should be: what you HEAR (speakers play a bit later, e.g. 0.24 s on Bluetooth) + the sync shift
+const playTime = () => playerPos() - ((P.info && P.info.latency) || 0) + P.offset;
 
 async function pollNow() {
   if (tab !== "play") return;
@@ -323,6 +326,10 @@ function drawTab() {
     if (bf) s += `<text class="tflag" x="${x}" y="${yEnd + 16}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
     h += s + "</g>";
   });
+  // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
+  (d.lyrics || []).forEach(([t, syl, nl], i) => {
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${t * PX + 6}" y="${yEnd + 40}">${esc(syl)}</text>`;
+  });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
   $("#tab-names").innerHTML = `<rect class="tnames-bg" x="0" y="${y0 - 10}" width="24" height="${yEnd - y0 + 20}"/>` +
@@ -343,7 +350,7 @@ function playTick() {
   if (tab !== "play") return;
   const p = P.info, t = playTime();
   if (p && p.title) {
-    const shown = Math.max(0, t - P.offset);
+    const shown = Math.max(0, playerPos());
     $("#pl-pos").textContent = fmtT(shown); $("#pl-dur").textContent = fmtT(p.duration || 0);
     $("#pl-fill").style.width = p.duration ? `${Math.min(100, (shown / p.duration) * 100)}%` : "0";
   }
@@ -371,6 +378,10 @@ function playTick() {
     document.getElementById("tb" + P.beatIdx)?.classList.remove("on");
     if (bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1]) document.getElementById("tb" + bt)?.classList.add("on");
     P.beatIdx = bt;
+  }
+  if (d.lyrics && d.lyrics.length) {  // light up the syllable being sung
+    const li = lastAt(d.lyrics, t, (x) => x[0]);
+    if (li !== P.lyIdx) { document.getElementById("ly" + P.lyIdx)?.classList.remove("on"); document.getElementById("ly" + li)?.classList.add("on"); P.lyIdx = li; }
   }
   const sig = `${bi}|${P.mode === "learn" ? ei + "|" + (cur ? 1 : 0) : ""}`;
   if (sig === P.sig) return;
@@ -511,7 +522,7 @@ async function syncListen() {
   try { d = await (await fetch("/api/live")).json(); } catch (e) { return; }
   if (!d.live) { syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); } return; }
   if (d.rms < 0.004) return;
-  const raw = playTime() - P.offset - 0.2;  // the sound analysed is ~0.2 s old
+  const raw = playerPos() - 0.2;  // the sound analysed is ~0.2 s old (and not yet through the speakers)
   SYNC.samples.push({ t: raw, c: d.chroma });
   SYNC.samples = SYNC.samples.filter((x) => raw - x.t < 30 && x.t <= raw);
   if (performance.now() - SYNC.last > 3000 && SYNC.samples.length >= 40) { SYNC.last = performance.now(); syncSolve(); }
@@ -538,6 +549,16 @@ function syncSolve() {
     if (sc.length && sc[0].s > bestOf + (r ? 0.05 : 0)) { bestOf = sc[0].s; scores = sc; bestShift = r; }
   }
   if (!scores.length) return;
+  // fine-tune around the best step: 0.05 s steps, reading the fingerprint between its slots
+  const at = (k) => { const a = pr[Math.floor(k)], b = pr[Math.ceil(k)]; if (!a || !b) return a || b; const f = k - Math.floor(k); return a.map((v, i) => v * (1 - f) + b[i] * f); };
+  const rot = (sl) => bestShift ? sl.map((_, i) => sl[(i - bestShift + 12) % 12]) : sl;
+  let fine = scores[0];
+  for (let o = scores[0].o - 0.3; o <= scores[0].o + 0.301; o += 0.05) {
+    let sum = 0, n = 0;
+    for (const x of SYNC.samples) { const sl = at((x.t + o) / step); if (!sl || !sl.some((v) => v)) continue; sum += cos(x.c, rot(sl)); n++; }
+    if (n && sum / n > fine.s) fine = { o: Math.round(o * 100) / 100, s: sum / n };
+  }
+  scores[0] = fine;
   const best = scores[0], median = scores[Math.floor(scores.length / 2)].s;
   SYNC.score = best.s;
   if (bestShift !== (SYNC.shift || 0) && best.s > 0.5) {
@@ -547,13 +568,13 @@ function syncSolve() {
     headsUp();
   }
   // stick with the current timing unless the new one is clearly better (no jumping back and forth)
-  const here = scores.find((x) => Math.abs(x.o - P.offset) < 0.13);
+  const here = scores.find((x) => Math.abs(x.o - P.offset) < 0.13 && x !== best) || (Math.abs(best.o - P.offset) < 0.13 ? best : null);
   if (SYNC.state === "locked" && here && best.s - here.s < 0.03) {
     syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
     return;
   }
   if (best.s > 0.5 && best.s - median > 0.06) {  // a clear winner: use it
-    if (Math.abs(best.o - P.offset) >= 0.25) {
+    if (Math.abs(best.o - P.offset) >= 0.05) {
       P.offset = best.o; showOffset(); P.sig = "";
       if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
     }

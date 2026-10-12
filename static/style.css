@@ -97,7 +97,7 @@ select { font: 14px var(--font); padding: 7px 10px; border-radius: 9px; border: 
   background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 .pl-heads ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; } .pl-heads li::marker { color: var(--accent); }
 /* the scrolling tab */
-.tabstrip { position: relative; flex-shrink: 0; height: 172px; background: #f5efe4; border-radius: 14px; overflow: hidden;
+.tabstrip { position: relative; flex-shrink: 0; height: 200px; background: #f5efe4; border-radius: 14px; overflow: hidden;
   box-shadow: inset 0 0 0 1px #0002; }
 #tab-svg { width: 100%; height: 100%; display: block; }
 .tline { stroke: #9a8f80; stroke-width: 1; } .tbar { stroke: #5c5246; stroke-width: 1.5; }
@@ -214,3 +214,6 @@ button.mini { padding: 3px 9px; font-size: 12px; margin-left: 6px; }
 .tab-sync.ok { color: #1d7a35; border-color: #1d7a3544; }
 .o-check { display: flex !important; grid-template-columns: none; flex-direction: row; align-items: center; gap: 8px; text-transform: none !important;
   font-size: 14px !important; color: var(--text) !important; letter-spacing: 0 !important; }
+.tlyric { fill: #6b6156; font: 600 13px var(--font); }
+.tlyric.first { fill: #3d352d; font-weight: 800; }
+.tlyric.on { fill: #e8461a; }

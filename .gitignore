@@ -7,3 +7,4 @@ data/page.js
 data/goto.txt
 tools/libnowplaying.dylib
 data/fake_now.json
+tools/outlatency
