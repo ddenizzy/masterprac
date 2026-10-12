@@ -10,7 +10,6 @@ Chords per bar come from the rhythm guitar's notes; the key from all notes. Cach
 import gzip
 import json
 import re
-from pathlib import Path
 
 import requests
 
@@ -67,7 +66,6 @@ def _events(track, times):
     """[[t, dur, [[string, fret], ...]], ...] for every played beat (rests skipped)."""
     ev = []
     for (start, end), m in zip(times, track["measures"]):
-        sig = m.get("signature")
         for v in m.get("voices", [])[:1]:  # main voice
             pos, beats = 0.0, v.get("beats", [])
             total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1

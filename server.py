@@ -293,6 +293,26 @@ def now_version():
     return jsonify({"ok": True, "match": m})
 
 
+def watch_now_playing():
+    """Background: every 3 s, follow whatever plays on the Mac, whichever page is open (Amp & tone, My songs...)."""
+    import time as _t
+    while True:
+        _t.sleep(3)
+        try:
+            p = h.now_playing()
+            if not p.get("title"):
+                continue
+            k = f"{p['title']}|{p['artist']}".lower()
+            with _match_lock:
+                if k not in _matches:
+                    _matches[k] = best_version(p["title"], p["artist"])
+                if _matches[k] and _followed.get("key") != k:
+                    _followed["key"] = k
+                    follow_song(_matches[k])
+        except Exception as e:
+            print(f"  now-playing watch: {e}", flush=True)
+
+
 def follow_song(m):
     """A new song started in Spotify/YouTube/...: it becomes THE song (Amp & tone, My songs) - the latest one wins,
     whether it was started in a player or opened in the Songsterr tab."""

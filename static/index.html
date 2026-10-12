@@ -66,15 +66,13 @@
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
 
-    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button></div><span class="sub ph-hint hidden" id="tab-hint"></span>
+    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button></div>
       <span class="tab-rest hidden" id="tab-rest"></span>
-      <span class="show-row"><span class="kicker">SHOW</span>
-        <button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
+      <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE TAB</span><button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
         <button class="chip-t" data-tshow="chords" title="Chord names above the tab">Chords</button>
         <button class="chip-t" data-tshow="held" title="Notes still ringing from before, shown as (3): you don't pick them again">Held notes</button>
         <button class="chip-t" data-tshow="muted" title="Muted, scratchy notes (x)">Muted notes</button>
-        <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button>
-      </span>
+        <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button></div></details>
       <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
       <span class="tab-sync hidden" id="tab-sync"></span>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
@@ -86,18 +84,14 @@
     </div>
 
     <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
-      <span class="show-row"><span class="kicker">SHOW</span>
-        <button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
+      <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE FRETBOARD</span><button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
         <button class="chip-t" data-show="next" title="The notes coming up next (dashed)"><i class="dot next"></i>Next</button>
         <button class="chip-t" data-show="chord" title="Notes of the chord playing now (green): land on these"><i class="dot chord"></i>Chord notes</button>
-        <button class="chip-t" data-show="scale" title="The key's safe notes (grey) and its home note (orange)"><i class="dot scale"></i>Safe notes</button>
-      </span>
+        <button class="chip-t" data-show="scale" title="The key's safe notes (grey) and its home note (orange)"><i class="dot scale"></i>Safe notes</button></div></details>
       <button class="ghost icon ph-toggle" data-collapse="board" title="Close / open the fretboard">&#9662;</button></div>
     <div class="board-wrap pl-body" data-body="board"><svg id="pl-board" class="board"></svg></div>
     <div class="pl-foot" id="pl-foot"></div>
   </section>
-
-  <button class="exit-full" id="pl-exitfull" title="Show everything again (Esc)">Show everything</button>
 
   <!-- pop-ups -->
   <div class="pop hidden" id="pop-options"><div class="pop-card opts">

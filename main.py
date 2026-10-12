@@ -363,6 +363,8 @@ def main():
         AppHelper.callAfter(lambda: NSApp.activateIgnoringOtherApps_(True))  # open in front
         AppHelper.callLater(1.0, lambda: api.fullscreen(True))  # and in macOS full screen
         threading.Thread(target=start_session, args=(api,), daemon=True).start()
+        import server
+        threading.Thread(target=server.watch_now_playing, daemon=True).start()  # Amp & tone etc. follow the song
         AppHelper.callLater(2.0, watch_browser, api._browser)
 
         def count_practice():  # time with a song open counts as practice

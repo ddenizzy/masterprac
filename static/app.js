@@ -294,7 +294,7 @@ async function loadTab(id, track) {
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
   if (P.songId !== id) return;  // the song changed meanwhile
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
-  SYNC.samples = []; SYNC.recent = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
+  SYNC.recent = []; SYNC.shifts = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
@@ -323,9 +323,7 @@ function partName(t) {
 // is the followed part silent around bar bi? then say so, and offer the guitar that IS playing
 function restNote(bi) {
   const d = P.tab, me = d.tracks.find((t) => t.i === d.lead), box = $("#tab-rest");
-  const hint = $("#tab-hint");
   if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); return; }
-  hint.classList.add("hidden");
   let n = 0; while (bi + n < me.active.length && me.active[bi + n] !== "1") n++;
   const other = d.tracks.find((t) => t.i !== d.lead && t.active && t.active[bi] === "1");
   const left = bi + n >= me.active.length;
@@ -371,8 +369,8 @@ function drawTab() {
   // spread the tab out for busy songs: the closest notes (10th percentile) get ~26 px between them
   const gaps = d.beats.slice(1).map((b, i) => b[0] - d.beats[i][0]).filter((x) => x > 0.02).sort((a, b) => a - b);
   P.PX = gaps.length ? Math.max(120, Math.min(320, 26 / gaps[Math.floor(gaps.length * 0.1)])) : 150;
-  const Z = document.body.classList.contains("pl-focus") ? 1.45 : 1;  // full screen: a bigger tab
-  const PX = P.PX * (Z > 1 ? 1.25 : 1), y0 = Math.round(50 * (Z > 1 ? 1.25 : 1)), gap = Math.round(17 * Z), ys = (s) => y0 + s * gap, n = d.tuning.length, yEnd = ys(n - 1);
+  const Z = document.body.classList.contains("pl-focus") ? 1.45 : 1.2;  // the tab is drawn bigger (and bigger still in full screen)
+  const PX = P.PX * (Z > 1.3 ? 1.25 : 1.1), y0 = Math.round(50 * (Z > 1.3 ? 1.25 : 1.1)), gap = Math.round(17 * Z), ys = (s) => y0 + s * gap, n = d.tuning.length, yEnd = ys(n - 1);
   P.PXdraw = PX;
   let h = "";
   const end = d.bars[d.bars.length - 1].end;
@@ -380,9 +378,9 @@ function drawTab() {
   let lastChord = "";
   d.bars.forEach((b, i) => {
     const x = b.t * PX;
-    h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6 - 6 * (Z - 1) * 2}">${i + 1}</text>`;
+    h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6 - 12 * (Z - 1)}">${i + 1}</text>`;
     if (b.section) h += `<text class="tsec" x="${x + 3}" y="14">${esc(b.section)}</text>`;
-    if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="${Z > 1 ? 30 : 31}">${esc(spell(b.chord))}</text>`;
+    if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="${Z > 1.3 ? 30 : 31}">${esc(spell(b.chord))}</text>`;
     lastChord = b.chord;
   });
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
@@ -635,10 +633,9 @@ setInterval(playEar, 120);
 // Songsterr times its tab to one recording (often a YouTube video); Spotify's version may start earlier or later.
 // Every ~150 ms: what's sounding now (12 note strengths) + where the player says we are. Every 3 s: try every shift
 // from -10 s to +10 s, score how well the heard notes match the tab's fingerprint, and lock onto the best one.
-const SYNC = { on: true, samples: [], last: 0, state: "", score: 0 };
+const SYNC = { on: true, state: "", score: 0 };
 try { SYNC.on = localStorage.getItem("pl-autosync") !== "off"; } catch (e) { /* fine */ }
 $("#o-autosync").checked = SYNC.on;
-const cos = (a, b) => { let d = 0, na = 0, nb = 0; for (let i = 0; i < 12; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return na && nb ? d / Math.sqrt(na * nb) : 0; };
 // every 2.5 s the server listens to the last ~20 s and compares it with the tab (sync.py): notes to get close,
 // then the attacks of every instrument (drums, bass, guitars) to within ~10 ms
 async function syncListen() {
@@ -650,23 +647,26 @@ async function syncListen() {
   let d;
   try { d = await (await fetch(`/api/sync/${P.tab.song_id}`)).json(); } catch (e) { SYNC.busy = false; return; }
   SYNC.busy = false;
-  SYNC.log = [...(SYNC.log || []), `${((performance.now() - (SYNC.t0 || 0)) / 1000).toFixed(1)}s:${d.result ? `heard=${d.result.heard_s} score=${d.result.note_score} conf=${d.result.note_conf} att=${d.result.attack_conf} off=${d.result.offset}` : "none"}`].slice(-12);
   if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); }
   const r = d.result;
   if (!r) { if (SYNC.state !== "locked") syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); return; }
   SYNC.score = r.note_score;
-  const sure = r.note_score > 0.4 && r.note_conf > 0.12;
+  // only clear answers count: a strong note match that stands out, and not stuck at the edge of the search (+-10 s)
+  const sure = r.note_score > 0.5 && r.note_conf > 0.15 && Math.abs(r.coarse) < 9.8;
   if (!sure) { if (SYNC.state !== "locked") syncStatus("Listening to sync... (not sure yet)"); return; }
-  const raw = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
-  // the middle of the last 3 answers: one odd reading is ignored, a real change wins after 2 checks
-  SYNC.recent = [...(SYNC.recent || []), raw].slice(-3);
-  const sorted = [...SYNC.recent].sort((a, b) => a - b), target = sorted[Math.floor(sorted.length / 2)];
-  if (r.shift !== (SYNC.shift || 0)) {
-    SYNC.shift = r.shift;
+  // which key the recording is in: switch only after 3 answers in a row agree (one-off answers are ignored)
+  SYNC.shifts = [...(SYNC.shifts || []), r.shift].slice(-3);
+  if (r.shift !== (SYNC.shift || 0) && SYNC.shifts.length === 3 && SYNC.shifts.every((x) => x === r.shift)) {
+    SYNC.shift = r.shift; SYNC.recent = [];
     const up = r.shift <= 6 ? r.shift : r.shift - 12;
     SYNC.keyNote = r.shift ? `<b>This recording is ${Math.abs(up)} half-step${Math.abs(up) > 1 ? "s" : ""} ${up > 0 ? "higher" : "lower"} than the tab.</b> ${up > 0 ? `Put a capo on fret ${up} and play the tab as written.` : `Tune down ${-up} half-step${up < -1 ? "s" : ""} to play along.`}` : "";
     headsUp();
   }
+  if (r.shift !== (SYNC.shift || 0)) return;  // an answer for another key than the one we're in: not a timing
+  const raw = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  // the middle of the last 3 answers: one odd reading is ignored, a real change wins after 2 checks
+  SYNC.recent = [...(SYNC.recent || []), raw].slice(-3);
+  const sorted = [...SYNC.recent].sort((a, b) => a - b), target = sorted[Math.floor(sorted.length / 2)];
   if (Math.abs(target - P.offset) >= 0.03) {  // small wobbles are ignored, real changes are followed
     P.offset = Math.round(target * 100) / 100; showOffset(); P.sig = "";
     if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
@@ -680,7 +680,7 @@ function syncStatus(text, ok) {
   el.textContent = text; el.classList.toggle("ok", !!ok); el.classList.toggle("hidden", !SYNC.on || !usingTab());
 }
 $("#o-autosync").addEventListener("change", (e) => {
-  SYNC.on = e.target.checked; SYNC.samples = []; SYNC.state = "";
+  SYNC.on = e.target.checked; SYNC.recent = []; SYNC.state = "";
   try { localStorage.setItem("pl-autosync", SYNC.on ? "on" : "off"); } catch (x) { /* fine */ }
   syncStatus("Listening to sync...");
 });
@@ -708,7 +708,6 @@ document.addEventListener("click", (e) => {
   }
   if (b.id === "pl-options") openPop("#pop-options");
   if (b.id === "pl-full") setFull(!document.body.classList.contains("pl-focus"));
-  if (b.id === "pl-exitfull") setFull(false);
   if (b.dataset.show) {
     show()[b.dataset.show] = !show()[b.dataset.show];
     try { localStorage.setItem("pl-show", JSON.stringify(SHOW)); } catch (x) { /* fine */ }
@@ -1237,3 +1236,11 @@ $("#o-mute").addEventListener("change", async (e) => {
 
 document.querySelectorAll("#pop-options select").forEach(pillify);
 syncPills();
+
+/* "Show" drop-downs: one opens at a time, a click anywhere else closes them */
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.dd[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
+});
+document.querySelectorAll("details.dd").forEach((d) => d.addEventListener("toggle", () => {
+  if (d.open) document.querySelectorAll("details.dd[open]").forEach((o) => { if (o !== d) o.removeAttribute("open"); });
+}));
