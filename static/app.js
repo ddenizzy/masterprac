@@ -849,6 +849,8 @@ document.addEventListener("click", (e) => {
     document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
     document.body.classList.toggle("mode-learn", P.mode === "learn");
     showChips(); P.sig = ""; foot(); headsUp(); drawPlayBoard();
+    toast(P.mode === "jam" ? "Jam: make up your own part. The fretboard shows the safe notes and the chord now"
+      : "Learn the part: copy the guitarist. The fretboard shows exactly what they play");
   }
   if (b.id === "pl-options") setTab("settings");
   if (b.id === "pl-full") setFull(!document.body.classList.contains("pl-focus"));
@@ -1669,3 +1671,36 @@ setInterval(() => {
   const t = PR.yt.getCurrentTime(), dur = PR.yt.getDuration() || 0;
   P.info.pos = t; P.info.at = Date.now() / 1000; P.info.duration = dur;
 }, 250);
+
+/* ---------- Party mode: every guitar part at once, each on its own fretboard ---------- */
+async function setParty(on) {
+  document.body.classList.toggle("party-mode", on);
+  $("#party").classList.toggle("hidden", !on);
+  $("#pl-party").textContent = on ? "Back to one guitar" : "Party: all guitars";
+  if (!on || !usingTab()) return;
+  const d = P.tab, parts = d.tracks.slice().sort((a, b) => (b.played || 0) - (a.played || 0)).slice(0, 4);
+  $("#party").innerHTML = parts.map((t) => `<div class="party-part" data-pi="${t.i}">
+    <div class="party-head"><span class="pk">${isAcoustic(t) ? "AC" : "EL"}</span><b>${esc(partName(t))}</b><span class="sub" id="party-now-${t.i}"></span></div>
+    <svg class="board party-board" id="party-b-${t.i}"></svg></div>`).join("");
+  P.partyTabs = {};
+  for (const t of parts) P.partyTabs[t.i] = await fetchTab(P.songId, t.i);
+}
+setInterval(() => {
+  if (!document.body.classList.contains("party-mode") || !P.partyTabs) return;
+  const t = playTime();
+  for (const [i, pt] of Object.entries(P.partyTabs)) {
+    if (!pt || pt.error) continue;
+    const bi = lastAt(pt.beats, t, (b) => b[0]), b = bi >= 0 && t < pt.beats[bi][0] + pt.beats[bi][1] + 0.05 ? pt.beats[bi] : null;
+    const notes = b ? b[3].filter((n) => !n[2].includes("t")) : [];
+    const sig = `${bi}|${notes.length}`, svg = $(`#party-b-${i}`);
+    if (!svg || svg._sig === sig) continue;
+    svg._sig = sig;
+    fretboard(svg, { tuning: pt.tuning, key: null, scale: [], labels: "names", area: "all", frets: 15, now: notes, next: [] });
+    const el = $(`#party-now-${i}`);
+    if (el) {  // like a chord chart, thick string to thin: "3 2 0 0 3 3" (x = not played)
+      const by = {}; notes.forEach(([s, f]) => { by[s] = f; });
+      el.textContent = notes.length ? pt.tuning.map((_, k) => by[pt.tuning.length - 1 - k] ?? "x").join(" ") : "resting";
+    }
+  }
+}, 80);
+document.addEventListener("click", (e) => { const b = e.target.closest("#pl-party"); if (b) setParty(!document.body.classList.contains("party-mode")); });

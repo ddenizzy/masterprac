@@ -594,3 +594,13 @@ body.neon .sh-c { color: #39ff88; }
 .practice-bar .seg-b { padding: 5px 12px; font-size: 13px; }
 .yt-box { margin-left: auto; width: 240px; height: 135px; border-radius: 10px; overflow: hidden; background: #000; }
 body.practice #tab-sync { display: none; }
+
+/* party mode */
+body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph, body.party-mode .board-wrap, body.party-mode details.howto, body.party-mode .pl-foot { display: none !important; }
+.party { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 12px; }
+.party-part { padding: 10px 12px 6px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.party-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.party-head .pk { font: 800 9.5px var(--font); padding: 2px 5px; border-radius: 5px; background: var(--line); color: var(--muted); }
+.party-head .sub { margin-left: auto; font-size: 12px; }
+.party-board { height: 190px; }
+.party-head .sub { font-family: "SF Mono", Menlo, monospace; letter-spacing: 1px; }

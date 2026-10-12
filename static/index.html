@@ -58,7 +58,8 @@
         <button class="ghost" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button>
         <button class="ghost" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
         <details class="dd more"><summary>More</summary><div class="dd-menu right">
-          <button class="chip-t" id="pl-options">Options</button>
+          <button class="chip-t" id="pl-party" title="Every guitar part of the song at once">Party: all guitars</button>
+          <button class="chip-t" id="pl-options">Settings</button>
           <div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div>
           <button class="chip-t" id="pl-open" disabled>Open in Songsterr &#8599;</button>
         </div></details>
@@ -92,6 +93,7 @@
       <span class="tab-sync hidden" id="tab-sync"></span>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
       <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
+    <div class="party hidden" id="party"></div>
     <div class="sheet hidden" id="sheet"><div class="sheet-chords" id="sheet-chords"></div><div class="sheet-lines" id="sheet-lines"></div></div>
     <div class="highway pl-body hidden" data-body="tab" id="highway"><canvas id="hw-canvas"></canvas></div>
     <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
