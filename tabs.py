@@ -85,8 +85,8 @@ NOTE_FLAGS = (("bend", "b"), ("slide", "s"), ("hp", "h"), ("dead", "x"), ("leftH
               ("harmonic", "H"), ("ghost", "g"))
 
 
-SLIDES = {"shift": "s", "legato": "s", "intoFromBelow": "i", "intoFromAbove": "I", "downwards": "o", "outDownwards": "o",
-          "upwards": "O", "outUpwards": "O"}
+SLIDES = {"shift": "s", "legato": "s", "intoFromBelow": "i", "intoFromAbove": "I", "below": "i", "above": "I",
+          "downwards": "o", "outDownwards": "o", "upwards": "O", "outUpwards": "O"}
 
 
 def _flags(n):
@@ -99,8 +99,21 @@ def _flags(n):
         if k == "slide":
             c = SLIDES.get(n["slide"], "s") if isinstance(n["slide"], str) else "s"
         elif k == "bend":
-            c = "B" if (n["bend"] or {}).get("tone", 50) >= 100 else "b"
+            bd = n["bend"] or {}
+            tone = bd.get("tone", 50)
+            c = "B" if tone >= 100 else "b" if tone >= 50 else "q"  # whole / half / quarter step
+            pts = [p.get("tone", 0) for p in bd.get("points", [])]
+            if pts and pts[-1] < max(pts):
+                c += "r"  # bend and release
+        elif k == "leftHandVibrato":
+            c = "V" if n[k] == "wide" else "v"
+        elif k == "harmonic":
+            c = "P" if n[k] == "pinch" else "H"
         out += c
+    if n.get("accentuated"):
+        out += "a"
+    if n.get("staccato"):
+        out += "c"
     return out
 
 
@@ -116,7 +129,14 @@ def _tab_beats(track, times):
             for b in beats:
                 frac = b["duration"][0] / b["duration"][1] / total
                 notes = [[n["string"], n["fret"], _flags(n)] for n in b.get("notes", []) if "fret" in n and not n.get("rest")]
-                bf = " ".join(f for k, f in (("palmMute", "pm"), ("letRing", "lr"), ("tremolo", "tr")) if b.get(k))
+                bf = " ".join(f for k, f in (("palmMute", "pm"), ("letRing", "lr"), ("tremolo", "tr"),
+                                             ("vibratoWithTremoloBar", "wh"), ("graceNote", "gr")) if b.get(k))
+                brush = (b.get("brushStroke") or {}).get("direction")
+                if brush in ("down", "up"):
+                    bf += f" s{brush[0]}"  # strum down / up (sd / su)
+                if b.get("pickStroke") in ("down", "up"):
+                    bf += f" p{b['pickStroke'][0]}"  # pick down / up (pd / pu)
+                bf = bf.strip()
                 text = (b.get("text") or {}).get("text", "")
                 if notes or text:
                     out.append([round(start + pos * (end - start), 3), round(frac * (end - start), 3), bi, notes, bf, text])
@@ -353,7 +373,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v16-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v17-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")

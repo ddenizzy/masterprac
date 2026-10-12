@@ -931,11 +931,15 @@ function fxBeat(d, bt, bnow) {
   if (!bnow) { FX.notes = []; return; }
   const [t0, dur] = bnow, after = d.beats.slice(bt + 1).find((b) => b[3].length);
   const before = FX.notes || [];
+  // let ring: the notes that were ringing keep a fading halo for a moment
+  const nowMs = performance.now();
+  FX.ringing = [...(FX.ringing || []).filter((r) => nowMs - r.at < 1600),
+    ...before.filter((b) => b.bf && b.bf.includes("lr") && b._q).map((b) => ({ x: b._q.x, y: b._q.y, s: b.s, f: b._q.fret, at: nowMs }))];
   FX.notes = bnow[3].filter((n) => !n[2].includes("t")).map(([s, f, fl]) => {
     const to = after && after[3].find((n) => n[0] === s);
     const again = before.some((b) => b.s === s && b.f === f);  // the same note picked again
     const prev = FX.last[s] ?? Object.values(FX.last).sort((a, b) => b.t - a.t)[0];
-    return { s, f, fl, t0, dur: Math.max(0.08, dur), to: to ? to[1] : null, again, pickedAt: performance.now(),
+    return { s, f, fl, bf: bnow[4] || "", t0, dur: Math.max(0.08, dur), to: to ? to[1] : null, again, pickedAt: performance.now(),
       from: prev && t0 - prev.t < 0.8 ? prev : null };  // where the finger comes from (for the fast flight)
   });
 }
@@ -950,8 +954,15 @@ function fxPos(n, t, geo) {
   if (fl.includes("o")) { fret = n.f - 3 * ease((p - 0.55) / 0.45); fade = 1 - ease((p - 0.6) / 0.4); }  // slide out, fade
   if (fl.includes("O")) { fret = n.f + 3 * ease((p - 0.55) / 0.45); fade = 1 - ease((p - 0.6) / 0.4); }
   // bend: push the string toward the middle of the neck, like a real finger (high strings down, low strings up)
-  if (/[bB]/.test(fl)) lift = (n.s < geo.strings / 2 ? -1 : 1) * (fl.includes("B") ? 0.95 : 0.55) * geo.gap * ease(p / 0.35);
+  if (/[bBq]/.test(fl)) {  // bend: quarter / half / whole step; with a release it comes back down
+    const size = fl.includes("B") ? 0.95 : fl.includes("b") ? 0.55 : 0.28;
+    const up = ease(p / 0.35) * (fl.includes("r") ? 1 - ease((p - 0.6) / 0.3) : 1);
+    lift = (n.s < geo.strings / 2 ? -1 : 1) * size * geo.gap * up;
+  }
   if (fl.includes("v")) lift += Math.sin(t * 2 * Math.PI * 6) * 3;                      // vibrato: wobble
+  if (fl.includes("V")) lift += Math.sin(t * 2 * Math.PI * 5) * 6;                      // wide vibrato
+  if ((n.bf || "").includes("wh")) lift += Math.sin(t * 2 * Math.PI * 4) * 4;            // whammy bar: the whole note wobbles
+  if (fl.includes("c")) fade = Math.min(fade, 1 - ease((p - 0.35) / 0.2));              // staccato: cut short
   // a new note right after another: fly in from where the finger was (fast)
   const fly = n.from && !/[iIsh]/.test(fl) ? 1 - ease((t - n.t0) / 0.09) : 0;
   let x = fretX(geo, fret), y = geo.sy(n.s) - lift;
@@ -973,6 +984,65 @@ function fxDraw() {
   if (!geo || !layer) return;
   const t = playTime(), now = performance.now();
   let h = "";
+  // barres. Main one: the lowest fretted fret with 2+ notes = the index finger lying across every string between them,
+  // even where other fingers press higher (there the bar is see-through, with a hollow ring and a dotted line to the
+  // fret that actually sounds). Other frets: a smaller bar when one finger flattens over 2+ neighbouring strings.
+  const held = FX.notes.filter((n) => n.f > 0 && n.s < geo.strings && !/[siIoOxh]/.test(n.fl));
+  const frets = [...new Set(held.map((n) => n.f))].sort((a, b) => a - b);
+  const barre = (f, from, to, main, covered) => {
+    const notesAt = FX.notes.filter((n) => n.f === f && n.s >= from && n.s <= to);
+    const age = notesAt.length ? (now - Math.min(...notesAt.map((n) => n.pickedAt))) / 1000 : 1;
+    const press = Math.min(1, 0.85 + age * 1.5), x = fretX(geo, f), w = (geo.r * 2 + 10) * press;
+    const y1 = geo.sy(from) - geo.r - 4, y2 = geo.sy(to) + geo.r + 4;
+    h += `<rect class="fx-barre ${main ? "main" : ""}" x="${x - w / 2}" y="${y1}" width="${w}" height="${y2 - y1}" rx="${w / 2}"/>`;
+    for (const c of covered) {  // under the barre, but another finger sounds a higher fret on this string
+      const y = geo.sy(c.s), xh = fretX(geo, c.f);
+      h += `<rect class="fx-barre-under" x="${x - w / 2 + 2}" y="${y - geo.r - 2}" width="${w - 4}" height="${geo.r * 2 + 4}" rx="${(w - 4) / 2}"/>`;
+      h += `<circle class="fx-barre-ring" cx="${x}" cy="${y}" r="${geo.r * 0.55}"/>`;
+      h += `<line class="fx-barre-link" x1="${x + geo.r * 0.6}" y1="${y}" x2="${xh - geo.r - 6}" y2="${y}"/>`;
+    }
+    if (main && to - from >= 2) h += `<text class="fx-barre-label" x="${x}" y="${y1 - 7}">barre ${f}</text>`;
+  };
+  if (frets.length) {
+    const f0 = frets[0], at0 = held.filter((n) => n.f === f0).map((n) => n.s);
+    if (at0.length >= 2) {
+      const from = Math.min(...at0), to = Math.max(...at0);
+      const covered = held.filter((n) => n.f > f0 && n.s > from && n.s < to);
+      barre(f0, from, to, true, covered);
+    }
+    for (const f of frets.slice(1)) {  // smaller barres: one finger flat over neighbouring strings
+      const ss = held.filter((n) => n.f === f).map((n) => n.s).sort((a, b) => a - b);
+      let run = [ss[0]];
+      for (const sN of [...ss.slice(1), null]) {
+        if (sN !== null && sN === run[run.length - 1] + 1) { run.push(sN); continue; }
+        if (run.length >= 2) barre(f, run[0], run[run.length - 1], false, []);
+        run = [sN];
+      }
+    }
+  }
+  // let ring: earlier notes still ringing (fading halos)
+  for (const r of FX.ringing || []) {
+    const a = 1 - (now - r.at) / 1600;
+    if (a > 0) h += `<circle class="fx-ringing s${r.s}" cx="${r.x}" cy="${r.y}" r="${geo.r + 5}" opacity="${(a * 0.45).toFixed(2)}"/>`;
+  }
+  // strum: a sweeping arrow across the chord's strings (down = from the thick string to the thin one)
+  const strum = FX.notes.find((n) => /\bs[du]\b/.test(n.bf || ""));
+  if (strum && FX.notes.length >= 2) {
+    const ages = (now - strum.pickedAt) / 1000, down = /\bsd\b/.test(strum.bf);
+    if (ages < 0.45) {
+      const ss = FX.notes.map((n) => n.s), lo = Math.max(...ss), hi = Math.min(...ss);
+      const xs = Math.min(...FX.notes.map((n) => fretX(geo, n.f))) - geo.r * 2.4;
+      const yA = geo.sy(down ? lo : hi), yB = geo.sy(down ? hi : lo), k = ease(ages / 0.18), yt = yA + (yB - yA) * k;
+      h += `<g class="fx-strum" opacity="${(1 - ease((ages - 0.25) / 0.2)).toFixed(2)}"><line x1="${xs}" y1="${yA}" x2="${xs}" y2="${yt}"/>
+        <path d="M${xs} ${yt} l-7 ${down ? 10 : -10} h14 z"/><text x="${xs - 12}" y="${(yA + yB) / 2}">${down ? "strum down" : "strum up"}</text></g>`;
+    }
+  }
+  // palm mute: the picking hand resting on the strings at the bridge end
+  if (FX.notes.some((n) => (n.bf || "").includes("pm"))) {
+    const ss = FX.notes.map((n) => n.s);
+    h += `<g class="fx-palm"><rect x="${geo.x2 - 70}" y="${geo.sy(Math.min(...ss)) - geo.r}" width="64" height="${geo.sy(Math.max(...ss)) - geo.sy(Math.min(...ss)) + geo.r * 2}" rx="14"/>
+      <text x="${geo.x2 - 38}" y="${geo.sy(Math.min(...ss)) - geo.r - 6}">palm mute</text></g>`;
+  }
   for (const n of FX.notes) {
     if (n.s >= geo.strings) continue;
     const q = fxPos(n, t, geo);
@@ -990,11 +1060,24 @@ function fxDraw() {
       let path = `M${geo.left} ${y0}`;
       for (let x = geo.left; x <= geo.x2; x += 8) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 11 + since * 90) * amp).toFixed(1)}`;
       h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${(1 - since / 0.3).toFixed(2)}"/>`;
-      const rg = (geo.r + 5) * (1 + since * (n.again ? 4 : 2.5));
+      const rg = (geo.r + 5) * (1 + since * (n.again || n.fl.includes("a") ? 4 : 2.5));
       h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.3)).toFixed(2)}"/>`;
     }
-    const rr = q.fret === 0 ? geo.r : geo.r + 5;  // smaller by the nut, so it never covers the string names
-    h += `<g class="note play s${n.s}" opacity="${q.fade.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${rr}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
+    let rr = q.fret === 0 ? geo.r : geo.r + 5;  // smaller by the nut, so it never covers the string names
+    if ((n.bf || "").includes("tr")) rr *= 1 + 0.12 * Math.sin(now / 1000 * 2 * Math.PI * 14);  // tremolo picking: fast flicker
+    if ((n.bf || "").includes("pm")) rr *= 0.85;                                                   // palm muted: smaller, dull
+    const op = q.fade * (n.fl.includes("g") ? 0.5 : 1);
+    if (n.fl.includes("x")) {  // muted (dead) note: an X
+      const k = rr * 0.7;
+      h += `<g class="note dead s${n.s}" opacity="${op.toFixed(2)}"><path d="M${q.x - k} ${q.y - k} L${q.x + k} ${q.y + k} M${q.x + k} ${q.y - k} L${q.x - k} ${q.y + k}"/></g>`;
+    } else if (/[HP]/.test(n.fl)) {  // harmonic: a diamond with a sparkle
+      h += `<g class="note play harm s${n.s}" opacity="${op.toFixed(2)}"><path d="M${q.x} ${q.y - rr - 3} L${q.x + rr + 3} ${q.y} L${q.x} ${q.y + rr + 3} L${q.x - rr - 3} ${q.y} Z"/>
+        <path class="spark" d="M${q.x + rr + 6} ${q.y - rr - 6} l6 -6 M${q.x + rr + 10} ${q.y - rr} h8 M${q.x + rr} ${q.y - rr - 10} v-8"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
+    } else {
+      h += `<g class="note play s${n.s} ${n.fl.includes("g") ? "ghost" : ""} ${(n.bf || "").includes("pm") ? "muted" : ""}" opacity="${op.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${rr}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
+    }
+    const pick = /\bpd\b/.test(n.bf || "") ? "⊓" : /\bpu\b/.test(n.bf || "") ? "V" : "";
+    if (pick) h += `<text class="fx-pick" x="${q.x - rr - 9}" y="${q.y - rr + 2}">${pick}</text>`;
   }
   FX.trails = FX.trails.filter((p) => now - p.at < 220);  // fast fade
   trail.innerHTML = FX.trails.map((p) => { const a = 1 - (now - p.at) / 220;

@@ -474,3 +474,32 @@ body.pl-focus .tlyric { font-size: 23px; }
 .pl-ph .tab-sync.ok { color: #39d98a; border-color: color-mix(in srgb, #39d98a 40%, var(--line)); }
 .pl-ph .tab-sync.hidden { display: none; }
 body.pl-focus .tnum { font-size: 12px; }
+
+/* barre: one finger across several strings */
+.board .fx-barre { fill: rgba(255, 210, 122, .22); stroke: #ffd27a; stroke-width: 2.5; }
+.board .fx-barre.main { fill: rgba(255, 210, 122, .32); stroke-width: 3.5; filter: drop-shadow(0 0 6px rgba(255, 210, 122, .7)); }
+.board .fx-barre-label { fill: #ffd27a; font: 800 12px var(--font); text-anchor: middle; letter-spacing: .5px; }
+body.neon .board .fx-barre { fill: rgba(155, 92, 255, .25); stroke: #c9b0ff; }
+body.neon .board .fx-barre.main { fill: rgba(155, 92, 255, .35); stroke: #e2d4ff; filter: drop-shadow(0 0 10px #9b5cff); }
+body.neon .board .fx-barre-label { fill: #e2d4ff; }
+
+/* barre: covered strings (another finger sounds higher) */
+.board .fx-barre-under { fill: rgba(11, 7, 22, .45); }
+.board .fx-barre-ring { fill: none; stroke: #ffd27a; stroke-width: 2; opacity: .8; }
+.board .fx-barre-link { stroke: #ffd27a; stroke-width: 2; stroke-dasharray: 2 5; opacity: .7; }
+body.neon .board .fx-barre-ring, body.neon .board .fx-barre-link { stroke: #e2d4ff; }
+/* more techniques */
+.board .fx-ringing { fill: none; stroke: #ffd27a; stroke-width: 3; }
+body:is(.str-two, .str-each) .board .fx-ringing { stroke: #fff; }
+.board .fx-strum line { stroke: #fff; stroke-width: 4; stroke-linecap: round; }
+.board .fx-strum path { fill: #fff; }
+.board .fx-strum text { fill: #fff; font: 800 11px var(--font); text-anchor: end; }
+.board .fx-palm rect { fill: rgba(255, 255, 255, .1); stroke: rgba(255, 255, 255, .45); stroke-width: 2; stroke-dasharray: 5 4; }
+.board .fx-palm text { fill: #fff; font: 800 11px var(--font); text-anchor: middle; opacity: .8; }
+.board .note.dead path { stroke: #d6d3e8; stroke-width: 4; stroke-linecap: round; }
+.board .note.harm path:first-of-type { fill: #fff; stroke: #ffd27a; stroke-width: 3; }
+.board .note.harm .spark { stroke: #ffd27a; stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.board .note.harm text { fill: #1a1208; }
+.board .note.ghost circle { fill: transparent !important; stroke-dasharray: 5 4; stroke-width: 3; }
+.board .note.muted circle { filter: saturate(.5) brightness(.85); }
+.board .fx-pick { fill: #fff; font: 900 14px var(--font); text-anchor: middle; }
