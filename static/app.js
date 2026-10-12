@@ -371,16 +371,18 @@ function drawTab() {
   // spread the tab out for busy songs: the closest notes (10th percentile) get ~26 px between them
   const gaps = d.beats.slice(1).map((b, i) => b[0] - d.beats[i][0]).filter((x) => x > 0.02).sort((a, b) => a - b);
   P.PX = gaps.length ? Math.max(120, Math.min(320, 26 / gaps[Math.floor(gaps.length * 0.1)])) : 150;
-  const PX = P.PX, y0 = 50, gap = 17, ys = (s) => y0 + s * gap, n = d.tuning.length, yEnd = ys(n - 1);
+  const Z = document.body.classList.contains("pl-focus") ? 1.45 : 1;  // full screen: a bigger tab
+  const PX = P.PX * (Z > 1 ? 1.25 : 1), y0 = Math.round(50 * (Z > 1 ? 1.25 : 1)), gap = Math.round(17 * Z), ys = (s) => y0 + s * gap, n = d.tuning.length, yEnd = ys(n - 1);
+  P.PXdraw = PX;
   let h = "";
   const end = d.bars[d.bars.length - 1].end;
   h += d.tuning.map((_, s) => `<line class="tline" x1="0" y1="${ys(s)}" x2="${end * PX}" y2="${ys(s)}"/>`).join("");
   let lastChord = "";
   d.bars.forEach((b, i) => {
     const x = b.t * PX;
-    h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6}">${i + 1}</text>`;
+    h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6 - 6 * (Z - 1) * 2}">${i + 1}</text>`;
     if (b.section) h += `<text class="tsec" x="${x + 3}" y="14">${esc(b.section)}</text>`;
-    if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="31">${esc(spell(b.chord))}</text>`;
+    if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="${Z > 1 ? 30 : 31}">${esc(spell(b.chord))}</text>`;
     lastChord = b.chord;
   });
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
@@ -395,23 +397,23 @@ function drawTab() {
         if (/[bB]/.test(fl)) label += fl.includes("B") ? "B" : "b"; if (fl.includes("h")) label += "h";
         if (fl.includes("s")) label += "/"; if (fl.includes("o")) label += "\\"; if (fl.includes("O")) label += "/"; if (fl.includes("v")) label += "~";
       }
-      const w = label.length * 7 + 4;
-      s += `<rect class="tbg" x="${x - 2}" y="${ys(st) - 7}" width="${w}" height="14"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${ys(st) + 4}">${esc(label)}</text>`;
+      const w = (label.length * 7 + 4) * Z;
+      s += `<rect class="tbg" x="${x - 2}" y="${ys(st) - 7 * Z}" width="${w}" height="${14 * Z}"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${ys(st) + 4 * Z}">${esc(label)}</text>`;
     }
-    if (bf && TSHOW.tech) s += `<text class="tflag" x="${x}" y="${yEnd + 16}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
+    if (bf && TSHOW.tech) s += `<text class="tflag" x="${x}" y="${yEnd + 16 * Z}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
     h += s + "</g>";
   });
   // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
   const lyEnd = [-1e9, -1e9];  // where the last word on each of the 2 lyric lines ends (no overlapping words)
   (TSHOW.lyrics ? d.lyrics || [] : []).forEach(([t, syl, nl], i) => {
-    const x = t * PX + 6, w = syl.length * 9.5 + 6, row = x >= lyEnd[0] ? 0 : x >= lyEnd[1] ? 1 : 0;
+    const x = t * PX + 6, w = (syl.length * 9.5 + 6) * Z, row = x >= lyEnd[0] ? 0 : x >= lyEnd[1] ? 1 : 0;
     lyEnd[row] = x + w;
-    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x}" y="${yEnd + 40 + row * 19}">${esc(syl)}</text>`;
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x}" y="${yEnd + 40 * Z + row * 19 * Z}">${esc(syl)}</text>`;
   });
   // timed lines from LRCLIB: their times are the recording's, so they sit at recording time + the sync shift
   P.lrcDrawnAt = P.offset;
   (TSHOW.lyrics && !(d.lyrics && d.lyrics.length) ? P.lrc || [] : []).forEach(([t, line], i) => {
-    h += `<text class="tlyric first" id="lr${i}" x="${(t + P.offset) * PX + 6}" y="${yEnd + 40}">${esc(line)}</text>`;
+    h += `<text class="tlyric first" id="lr${i}" x="${(t + P.offset) * PX + 6}" y="${yEnd + 40 * Z}">${esc(line)}</text>`;
   });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
@@ -439,7 +441,7 @@ function playTick() {
   }
   if (!usingTab()) return;
   const d = P.tab;
-  $("#tab-g").setAttribute("transform", `translate(${(P.headX || 200) - t * P.PX - 6},0)`);
+  $("#tab-g").setAttribute("transform", `translate(${(P.headX || 200) - t * (P.PXdraw || P.PX) - 6},0)`);
   const last = d.bars[d.bars.length - 1];
   if (t > last.end + 3) {  // past the end of the tab: a longer version, or not this song
     if (P.sig !== "end") {
@@ -585,7 +587,7 @@ function setFull(on) {
   $("#pl-full").textContent = on ? "Show everything" : "Full screen";
   // entering also puts the window in macOS full screen; leaving only leaves the focus view (the app stays full screen)
   if (on && api() && api().fullscreen) api().fullscreen(true);
-  setTimeout(() => { layoutTab(); drawPlayBoard(); }, 400);
+  setTimeout(() => { drawTab(); layoutTab(); drawPlayBoard(); }, 400);
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("pl-focus")) setFull(false); });
 
@@ -670,7 +672,7 @@ async function syncListen() {
     if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
   }
   SYNC.state = "locked";
-  syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s${r.attack_conf >= 1.8 ? " · precise" : ""}`, true);
+  syncStatus(`In sync ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
 }
 setInterval(syncListen, 1000);
 function syncStatus(text, ok) {

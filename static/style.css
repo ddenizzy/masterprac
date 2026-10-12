@@ -458,3 +458,19 @@ body.pl-focus .highway { height: 44vh; }
 body.pl-focus .exit-full { display: block; }
 body.pl-focus .pl-ph[data-panel="tab"] { padding-right: 140px; }
 body.pl-focus .tabstrip { height: 230px; }
+
+/* full screen: a bigger tab */
+body.pl-focus .tabstrip { height: 300px; }
+body.pl-focus .tnote { font-size: 18px; }
+body.pl-focus .tchord { font-size: 21px; }
+body.pl-focus .tsec, body.pl-focus .tnum { font-size: 13px; }
+body.pl-focus .tname { font-size: 14px; }
+body.pl-focus .tflag { font-size: 12px; }
+body.pl-focus .tlyric { font-size: 23px; }
+
+/* sync status: a small pill in the tab's header row (never over the tab) */
+.pl-ph .tab-sync { position: static; flex-shrink: 0; white-space: nowrap; font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+.pl-ph .tab-sync.ok { color: #39d98a; border-color: color-mix(in srgb, #39d98a 40%, var(--line)); }
+.pl-ph .tab-sync.hidden { display: none; }
+body.pl-focus .tnum { font-size: 12px; }
