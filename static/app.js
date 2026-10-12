@@ -177,7 +177,7 @@ function fretboard(svg, o) {
   g += `<circle class="inlay" cx="${(fx(11) + fx(12)) / 2 - 8}" cy="${H - bottom + 17}" r="5"/><circle class="inlay" cx="${(fx(11) + fx(12)) / 2 + 8}" cy="${H - bottom + 17}" r="5"/>`;
   for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 20}">${f}</text>`;
   tuning.forEach((open, s) => {
-    g += `<line class="string" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1.6 + s * 0.6}"/>`;
+    g += `<line class="string s${s}" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1.6 + s * 0.6}"/>`;
     g += `<text class="sname" x="4" y="${sy(s) + 4}">${nn(open % 12)}</text>`;
     for (let f = 0; f <= FR; f++) {
       const pc = (open + f) % 12;
@@ -207,7 +207,12 @@ function fretboard(svg, o) {
         <path d="M${x2 - dir * r2} ${y} l${-dir * 9} -6 v12 z"/>
         <text x="${(x1 + x2) / 2}" y="${y - 9}">${fl.includes("s") ? "slide" : "hammer-on"}</text></g>`;
     }
-    if (fl.includes("b")) g += `<g class="tech-bend"><path d="M${xAt(f)} ${sy(s) - r - 6} v-16 m-6 6 l6 -6 l6 6"/><text x="${xAt(f) + 10}" y="${sy(s) - r - 12}">bend</text></g>`;
+    if (!o.animate && /[bB]/.test(fl)) g += `<g class="tech-bend"><path d="M${xAt(f)} ${sy(s) - r - 6} v-16 m-6 6 l6 -6 l6 6"/><text x="${xAt(f) + 10}" y="${sy(s) - r - 12}">bend</text></g>`;
+  }
+  if (o.animate) {  // the animator draws the playing notes (moving bubbles + trails) into this layer
+    svg._geo = { xAt, sy, strings, r, left, x2: W - right, gap: (H - top - bottom) / (strings - 1) };
+    svg.innerHTML = g + `<g id="fx-trail"></g><g id="fx-now"></g>`;
+    return;
   }
   for (const [s, f, fl = ""] of o.now || []) {
     g += spot(s, f, "play");
@@ -292,8 +297,9 @@ async function loadTab(id, track) {
 
 // "Thom Yorke | Takamine EN10C | Rhythm Guitar" -> "Thom Yorke · Rhythm Guitar"
 function partName(t) {
-  const bits = (t.name || "").split("|").map((x) => x.trim()).filter(Boolean);
-  return (bits.length >= 3 ? [bits[0], bits[bits.length - 1]] : bits).join(" · ") || t.instrument || "Guitar";
+  const bits = (t.name || "").split(/\s*\|\s*|\s+-\s+/).map((x) => x.trim()).filter(Boolean);
+  const name = (bits.length >= 3 ? [bits[0], bits[bits.length - 1]] : bits).join(" · ") || t.instrument || "Guitar";
+  return name.length > 34 ? name.slice(0, 33) + "..." : name;  // player · role, short
 }
 // is the followed part silent around bar bi? then say so, and offer the guitar that IS playing
 function restNote(bi) {
@@ -365,7 +371,11 @@ function drawTab() {
       if (!TSHOW.held && fl.includes("t")) continue;  // still ringing: not picked again
       if (!TSHOW.muted && fl.includes("x")) continue;
       let label = fl.includes("x") ? "x" : fl.includes("H") ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
-      if (TSHOW.tech) { if (fl.includes("b")) label += "b"; if (fl.includes("h")) label += "h"; if (fl.includes("s")) label += "/"; if (fl.includes("v")) label += "~"; }
+      if (TSHOW.tech) {
+        if (/[iI]/.test(fl)) label = (fl.includes("i") ? "/" : "\\") + label;
+        if (/[bB]/.test(fl)) label += fl.includes("B") ? "B" : "b"; if (fl.includes("h")) label += "h";
+        if (fl.includes("s")) label += "/"; if (fl.includes("o")) label += "\\"; if (fl.includes("O")) label += "/"; if (fl.includes("v")) label += "~";
+      }
       const w = label.length * 7 + 4;
       s += `<rect class="tbg" x="${x - 2}" y="${ys(st) - 7}" width="${w}" height="14"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${ys(st) + 4}">${esc(label)}</text>`;
     }
@@ -373,8 +383,11 @@ function drawTab() {
     h += s + "</g>";
   });
   // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
+  const lyEnd = [-1e9, -1e9];  // where the last word on each of the 2 lyric lines ends (no overlapping words)
   (TSHOW.lyrics ? d.lyrics || [] : []).forEach(([t, syl, nl], i) => {
-    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${t * PX + 6}" y="${yEnd + 40}">${esc(syl)}</text>`;
+    const x = t * PX + 6, w = syl.length * 9.5 + 6, row = x >= lyEnd[0] ? 0 : x >= lyEnd[1] ? 1 : 0;
+    lyEnd[row] = x + w;
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x}" y="${yEnd + 40 + row * 19}">${esc(syl)}</text>`;
   });
   // timed lines from LRCLIB: their times are the recording's, so they sit at recording time + the sync shift
   P.lrcDrawnAt = P.offset;
@@ -445,6 +458,7 @@ function playTick() {
   // from the tab's beats (they carry techniques: slides, hammer-ons, bends...): [string, fret, flags]
   const bnow = bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1] ? d.beats[bt] : null;
   P.nowNotes = bnow ? bnow[3].filter((n) => !n[2].includes("t")) : (cur ? cur[2].map(([a, b]) => [a, b, ""]) : []);
+  if (bt !== FX.beat && !FX.freeze) fxBeat(d, bt, bnow);  // (freeze: for testing the drawing)
   P.nextNotes = d.beats.slice(bt + 1).filter((b) => b[0] - t < 1.2 && b[3].length).slice(0, 4).flatMap((b) => b[3].filter((n) => !n[2].includes("t")));
   if (bi !== P.barIdx) {
     P.barIdx = bi;
@@ -471,7 +485,7 @@ function setChord(name, next) {
 }
 
 // things worth knowing about what's coming: tuning, the next part, techniques, the tab author's notes
-const TECH = { b: "bends", s: "slides", h: "hammer-ons / pull-offs", x: "muted (scratchy) notes", v: "vibrato", H: "harmonics",
+const TECH = { b: "bends", B: "big bends (a whole step)", s: "slides", i: "slides into notes", I: "slides into notes", o: "slides out", O: "slides out", h: "hammer-ons / pull-offs", x: "muted (scratchy) notes", v: "vibrato", H: "harmonics",
   pm: "palm mute (rest your picking hand on the strings)", lr: "let the notes ring", tr: "fast tremolo picking" };
 function headsUp(extra) {
   const out = [], d = usingTab() ? P.tab : null;
@@ -501,7 +515,7 @@ function foot(next) {
   if (!k) { $("#pl-foot").innerHTML = ""; return; }
   const chip = (pc) => `<span class="${pc === k.root ? "root" : c && c.tones.includes(pc) ? "chord" : ""}">${nn(pc)}</span>`;
   if (P.mode === "learn") {
-    const how = (fl = "") => fl.includes("s") ? " (slide)" : fl.includes("h") ? " (hammer-on / pull-off)" : fl.includes("b") ? " (bend)" : fl.includes("v") ? " (vibrato)" : fl.includes("x") ? " (muted)" : "";
+    const how = (fl = "") => /[siIoO]/.test(fl) ? " (slide)" : fl.includes("h") ? " (hammer-on / pull-off)" : fl.includes("B") ? " (bend a whole step)" : fl.includes("b") ? " (bend)" : fl.includes("v") ? " (vibrato)" : fl.includes("x") ? " (muted)" : "";
     const strs = P.nowNotes.map(([s, f, fl]) => `string ${s + 1} fret ${f}${how(fl)}`).join(", ");
     $("#pl-foot").innerHTML = `<div><span class="kicker">PLAY NOW</span> ${strs ? `<b>${strs}</b>` : `<span class="sub">rest</span>`}</div>
       <div class="sub"><i class="dot play"></i>red = play this now &nbsp; <i class="dot next"></i>dashed = coming next &nbsp; numbers = frets &nbsp; string 1 = thinnest</div>`;
@@ -532,7 +546,7 @@ function drawPlayBoard() {
     chordTones: sh.chord && c ? c.tones : [], labels: $("#o-labels").value, area: $("#o-area").value,
     dim: notesShown() && (sh.scale || sh.chord),  // the guitarist's notes stand out over faded safe notes
     frets: notesShown() && usingTab() ? Math.min(22, Math.max(15, ...P.tab.events.flatMap((e) => e[2].map((x) => x[1] + 1)))) : 15,
-    now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [], ahead: P.nextNotes });
+    now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [], ahead: P.nextNotes, animate: sh.now && usingTab() });
   if (P.mode === "learn") foot();
 }
 showChips();
@@ -883,3 +897,82 @@ document.addEventListener("click", (e) => {
   if (b.dataset.version) useVersion({ id: Number(b.dataset.version) });
 });
 $("#ver-paste").addEventListener("submit", (e) => { e.preventDefault(); const u = $("#ver-url").value.trim(); if (u) useVersion({ url: u }); });
+
+/* ---------- fretboard animations: the notes being played move like the guitarist's fingers ---------- */
+// slide = glide along the string (to the next note, or in from 2 frets away, or out and fade), bend = push upward
+// (half / whole step), vibrato = wobble, hammer-on / pull-off = quick snap, a jump to a new spot = a fast flight.
+// Every moving bubble leaves a fast-fading trail. Timed by the song (playTime), so it follows the sync.
+const FX = { beat: -2, notes: [], trails: [], last: {} };
+function fxBeat(d, bt, bnow) {
+  FX.beat = bt;
+  if (!bnow) { FX.notes = []; return; }
+  const [t0, dur] = bnow, after = d.beats.slice(bt + 1).find((b) => b[3].length);
+  FX.notes = bnow[3].filter((n) => !n[2].includes("t")).map(([s, f, fl]) => {
+    const to = after && after[3].find((n) => n[0] === s);
+    const prev = FX.last[s] ?? Object.values(FX.last).sort((a, b) => b.t - a.t)[0];
+    return { s, f, fl, t0, dur: Math.max(0.08, dur), to: to ? to[1] : null,
+      from: prev && t0 - prev.t < 0.8 ? prev : null };  // where the finger comes from (for the fast flight)
+  });
+}
+const ease = (p) => (p < 0 ? 0 : p > 1 ? 1 : p * p * (3 - 2 * p));
+function fxPos(n, t, geo) {
+  const p = (t - n.t0) / n.dur, fl = n.fl;
+  let fret = n.f, lift = 0, fade = 1;
+  if (fl.includes("i")) fret = n.f - 2 * (1 - ease(p / 0.25));            // slide in from 2 frets below
+  if (fl.includes("I")) fret = n.f + 2 * (1 - ease(p / 0.25));            // ... or above
+  if (fl.includes("s") && n.to != null) fret = n.f + (n.to - n.f) * ease((p - 0.15) / 0.75);  // glide to the next note
+  if (fl.includes("h") && n.to != null) fret = n.f + (n.to - n.f) * ease((p - 0.8) / 0.12);   // quick snap at the end
+  if (fl.includes("o")) { fret = n.f - 3 * ease((p - 0.55) / 0.45); fade = 1 - ease((p - 0.6) / 0.4); }  // slide out, fade
+  if (fl.includes("O")) { fret = n.f + 3 * ease((p - 0.55) / 0.45); fade = 1 - ease((p - 0.6) / 0.4); }
+  // bend: push the string toward the middle of the neck, like a real finger (high strings down, low strings up)
+  if (/[bB]/.test(fl)) lift = (n.s < geo.strings / 2 ? -1 : 1) * (fl.includes("B") ? 0.95 : 0.55) * geo.gap * ease(p / 0.35);
+  if (fl.includes("v")) lift += Math.sin(t * 2 * Math.PI * 6) * 3;                      // vibrato: wobble
+  // a new note right after another: fly in from where the finger was (fast)
+  const fly = n.from && !/[iIsh]/.test(fl) ? 1 - ease((t - n.t0) / 0.09) : 0;
+  let x = fretX(geo, fret), y = geo.sy(n.s) - lift;
+  if (fly > 0 && n.from) { x = x + (n.from.x - x) * fly; y = y + (n.from.y - y) * fly; }
+  return { x, y, fade, fret: Math.round(fret) };
+}
+function fretX(geo, fret) {  // x of a (possibly in-between) fret position
+  const a = Math.floor(fret), b = Math.ceil(fret), k = fret - a;
+  const xa = geo.xAt(Math.max(0, a)), xb = geo.xAt(Math.max(0, b));
+  return xa + (xb - xa) * k;
+}
+function fxFrame() { requestAnimationFrame(fxFrame); fxDraw(); }
+// backup timer: screen-refresh callbacks pause when the window isn't visible; draw anyway (~30 fps)
+setInterval(() => { if (performance.now() - (FX.drawnAt || 0) > 60) fxDraw(); }, 33);
+function fxDraw() {
+  FX.drawnAt = performance.now();
+  if (tab !== "play" || !usingTab() || !show().now) return;
+  const svg = $("#pl-board"), geo = svg._geo, layer = svg.querySelector("#fx-now"), trail = svg.querySelector("#fx-trail");
+  if (!geo || !layer) return;
+  const t = playTime(), now = performance.now();
+  let h = "";
+  for (const n of FX.notes) {
+    if (n.s >= geo.strings) continue;
+    const q = fxPos(n, t, geo);
+    const prev = n._q;
+    if (prev && (Math.abs(prev.x - q.x) > 1.5 || Math.abs(prev.y - q.y) > 1.5)) FX.trails.push({ x: q.x, y: q.y, at: now, s: n.s });  // moving: leave a trail
+    n._q = q;
+    FX.last[n.s] = { x: q.x, y: q.y, t };
+    if (n.f === 0 && !/[siIoOh]/.test(n.fl)) {  // an open string: the whole string lights up, fading over the note
+      const a = Math.max(0, 1 - Math.max(0, (t - n.t0) / Math.max(0.25, n.dur)));
+      h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
+    }
+    h += `<g class="note play s${n.s}" opacity="${q.fade.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${geo.r + 5}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
+  }
+  FX.trails = FX.trails.filter((p) => now - p.at < 220);  // fast fade
+  trail.innerHTML = FX.trails.map((p) => { const a = 1 - (now - p.at) / 220;
+    return `<circle class="fx-trail s${p.s}" cx="${p.x}" cy="${p.y}" r="${(geo.r + 5) * (0.55 + 0.45 * a)}" opacity="${(a * 0.55).toFixed(2)}"/>`; }).join("");
+  layer.innerHTML = h;
+}
+requestAnimationFrame(fxFrame);
+
+/* ---------- Look: Classic / Neon (Guitar Hero style), remembered ---------- */
+function setLook(look) {
+  document.body.classList.toggle("neon", look === "neon");
+  try { localStorage.setItem("mp-look", look); } catch (e) { /* fine */ }
+  $("#o-look").value = look;
+}
+try { setLook(localStorage.getItem("mp-look") || "classic"); } catch (e) { setLook("classic"); }
+$("#o-look").addEventListener("change", (e) => setLook(e.target.value));

@@ -85,6 +85,25 @@ NOTE_FLAGS = (("bend", "b"), ("slide", "s"), ("hp", "h"), ("dead", "x"), ("leftH
               ("harmonic", "H"), ("ghost", "g"))
 
 
+SLIDES = {"shift": "s", "legato": "s", "intoFromBelow": "i", "intoFromAbove": "I", "downwards": "o", "outDownwards": "o",
+          "upwards": "O", "outUpwards": "O"}
+
+
+def _flags(n):
+    """Technique letters for one note. Slides: s = to the next note, i / I = into it from below / above,
+    o / O = out of it downwards / upwards. Bends: b = half step, B = whole step or more."""
+    out = ""
+    for k, c in NOTE_FLAGS:
+        if not n.get(k):
+            continue
+        if k == "slide":
+            c = SLIDES.get(n["slide"], "s") if isinstance(n["slide"], str) else "s"
+        elif k == "bend":
+            c = "B" if (n["bend"] or {}).get("tone", 50) >= 100 else "b"
+        out += c
+    return out
+
+
 def _tab_beats(track, times):
     """Every beat of the shown part, for drawing the tab: [t, dur, bar, [[string, fret, flags]], beat_flags, text].
     flags: b bend, s slide, h hammer-on/pull-off, x muted, v vibrato, t tied, H harmonic, g ghost;
@@ -96,8 +115,7 @@ def _tab_beats(track, times):
             total = sum(b["duration"][0] / b["duration"][1] for b in beats) or 1
             for b in beats:
                 frac = b["duration"][0] / b["duration"][1] / total
-                notes = [[n["string"], n["fret"], "".join(c for k, c in NOTE_FLAGS if n.get(k))]
-                         for n in b.get("notes", []) if "fret" in n and not n.get("rest")]
+                notes = [[n["string"], n["fret"], _flags(n)] for n in b.get("notes", []) if "fret" in n and not n.get("rest")]
                 bf = " ".join(f for k, f in (("palmMute", "pm"), ("letRing", "lr"), ("tremolo", "tr")) if b.get(k))
                 text = (b.get("text") or {}).get("text", "")
                 if notes or text:
@@ -335,7 +353,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v15-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v16-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
