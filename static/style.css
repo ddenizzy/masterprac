@@ -547,3 +547,43 @@ details.dd.more .seg { width: 100%; } details.dd.more .seg .seg-b { flex: 1; }
 .tq-slide { stroke: #b45f00; stroke-width: 2.2; stroke-linecap: round; }
 .tq-strum { stroke: #8a7f70; stroke-width: 1.6; }
 body.neon :is(.tq-arc, .tq-bend, .tq-vib, .tq-head) { stroke: #ffd27a; } body.neon .tq-slide { stroke: #ffd27a; } body.neon .tq-strum { stroke: #7e7cc0; }
+
+.board .fx-shimmer { stroke-width: 3; }
+.foot-help { max-width: 760px; }
+details.howto { margin: -4px 0 -2px; font-size: 13px; color: var(--muted); }
+details.howto summary { cursor: pointer; width: max-content; list-style: none; }
+details.howto summary::before { content: "? "; font-weight: 800; color: var(--accent); }
+.howto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 18px; padding: 10px 2px 4px; }
+.howto-grid span { display: flex; align-items: center; gap: 8px; } .howto-grid b { color: var(--text); font-family: "SF Mono", Menlo, monospace; }
+.howto-grid svg { flex-shrink: 0; overflow: visible; }
+.lg.held { width: 16px; height: 16px; border-radius: 50%; background: rgba(80,170,255,.22); border: 2px dashed rgba(120,190,255,.75); }
+
+/* ---------- Song chords mode ---------- */
+body.sheet-mode #tabstrip, body.sheet-mode #highway, body.sheet-mode .pl-ph[data-panel="tab"], body.sheet-mode details.howto { display: none !important; }
+.sheet { display: grid; gap: 12px; flex-shrink: 0; }
+.sheet-chords { display: flex; gap: 8px; flex-wrap: wrap; }
+.cd-btn { padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+.cd-btn:hover { border-color: var(--accent); }
+.sheet-lines { height: 46vh; overflow: auto; padding: 8px 18px 40vh; border-radius: 16px; background: var(--card); border: 1px solid var(--line);
+  font-family: "SF Mono", Menlo, monospace; scroll-behavior: smooth; }
+.sh-sec { margin: 18px 0 6px; font: 800 12px var(--font); letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.sh-line { position: relative; padding: 4px 8px; border-radius: 10px; margin: 2px 0; transition: background .2s, opacity .2s; }
+.sh-line.past { opacity: .45; }
+.sh-line.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sh-top { position: relative; height: 1.4em; font-size: 16px; }
+.sh-c { position: absolute; top: 0; font-weight: 800; color: #1d9a4a; cursor: pointer; }
+.sh-c.solo { position: static; margin-right: 18px; font-size: 18px; }
+.sh-c:hover { text-decoration: underline; }
+.sh-text { font-size: 19px; white-space: pre; color: var(--text); }
+.sh-dim { color: var(--muted); font-size: 14px; }
+.sh-line.inst { display: flex; flex-wrap: wrap; align-items: center; padding: 8px; }
+body.neon .sh-c { color: #39ff88; }
+#pl-chords.on { border-color: var(--accent); color: var(--accent); }
+/* chord diagrams */
+.cd .cd-l { stroke: var(--muted); stroke-width: 1.2; } .cd .cd-nut { fill: var(--text); }
+.cd .cd-name { fill: var(--text); font: 800 13px var(--font); text-anchor: middle; }
+.cd .cd-fret { fill: var(--muted); font: 700 10px var(--font); text-anchor: end; }
+.cd .cd-dot, .cd .cd-barre { fill: var(--accent); } .cd .cd-fg { fill: #1a1208; font: 800 9px var(--font); text-anchor: middle; }
+.cd .cd-o { fill: none; stroke: var(--text); stroke-width: 1.4; } .cd .cd-x { fill: var(--muted); font: 700 10px var(--font); text-anchor: middle; }
+.cd-pop { width: min(360px, 92vw); justify-items: center; text-align: center; }
+#pl-chord { cursor: pointer; }

@@ -182,8 +182,11 @@ function fretboard(svg, o) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const left = 84, right = 22, top = 40, bottom = 30;  // the string names get their own space on the left
   // real guitar spacing: frets get closer up the neck
+  // even spacing (a neat grid, easy to read) or real guitar spacing (frets get closer up the neck) - Settings
+  const real = document.body.classList.contains("real-frets");
   const scaleLen = (W - left - right) / (1 - Math.pow(2, -FR / 12));
-  const fx = (f) => left + scaleLen * (1 - Math.pow(2, -f / 12));
+  const fx = (f) => real ? left + scaleLen * (1 - Math.pow(2, -f / 12)) : left + (W - left - right) * f / FR;
+
   const tuning = o.tuning, strings = tuning.length, sy = (s) => top + (s * (H - top - bottom)) / (strings - 1);
   const key = o.key, scale = o.scale || [], chordTones = o.chordTones || [], mode = o.labels, area = o.area || "all";
   const lowOpen = tuning[strings - 1] % 12;
@@ -655,10 +658,10 @@ function foot(next) {
   }
   const lowE = ((k.root - (P.tab && usingTab() ? P.tab.tuning[P.tab.tuning.length - 1] : 40)) % 12 + 12) % 12;
   $("#pl-foot").innerHTML = `
-    <div><span class="kicker">SAFE NOTES</span> <span class="notes">${SCALES.pent(k.minor).map((i) => chip((k.root + i) % 12)).join("")}</span></div>
+    <div title="The 5 notes of the key's pentatonic scale: play any of them over this song and it won't sound wrong. Orange = the home note."><span class="kicker">SAFE NOTES</span> <span class="notes">${SCALES.pent(k.minor).map((i) => chip((k.root + i) % 12)).join("")}</span></div>
     <div><span class="kicker">LAND ON NOW</span> <span class="notes">${c ? c.tones.map((pc) => `<span class="chord">${nn(pc)}</span>`).join("") : "-"}</span>
       ${n ? `<span class="sub">then ${esc(spell(next))}: ${n.tones.map((pc) => nn(pc)).join(" ")}</span>` : ""}</div>
-    <div class="sub">Start at <b>${lowE === 0 ? "the open thickest string (or fret 12)" : `fret ${lowE} of the thickest string`}</b>: that's ${nn(k.root)}, home.</div>`;
+    <div class="sub foot-help">Safe notes: any of them sound fine over the whole song. Land on now: the notes of the chord playing now, the best ones to end a phrase on. Start at <b>${lowE === 0 ? "the open thickest string (or fret 12)" : `fret ${lowE} of the thickest string`}</b>: that's ${nn(k.root)}, home.</div>`;
 }
 
 // what the fretboard shows (the SHOW switches); Jam and Learn each remember their own
@@ -847,7 +850,7 @@ document.addEventListener("click", (e) => {
     try { localStorage.setItem("pl-collapsed", JSON.stringify(collapsed)); } catch (x) { /* fine */ }
     applyCollapsed();
   }
-  if (b.id === "pl-chords") { buildMap(); P.barIdx = -1; openPop("#pop-chords"); }
+  if (b.id === "pl-chords") setSheet(!document.body.classList.contains("sheet-mode"));
   if (b.dataset.nudge && P.songId) {
     if (SYNC.on) { SYNC.on = false; $("#o-autosync").checked = false; syncStatus(""); toast("Auto-sync off: you're setting the timing"); }
     SYNC.points = [];
@@ -1188,13 +1191,13 @@ function fxDraw() {
       h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
     }
     const since = (now - n.pickedAt) / 1000, col = strColor(n.s);
-    if (since < 0.3 && !n.fl.includes("x") && q.fret > 0) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
-      const amp = (n.again ? 4.5 : 3) * (1 - since / 0.3), y0 = geo.sy(n.s);
+    if (since < 0.5 && !n.fl.includes("x") && q.fret > 0) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
+      const amp = (n.again ? 8 : 6) * Math.pow(1 - since / 0.5, 1.5), y0 = geo.sy(n.s);
       let path = `M${geo.left} ${y0}`;
-      for (let x = geo.left; x <= geo.x2; x += 8) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 11 + since * 90) * amp).toFixed(1)}`;
-      h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${(1 - since / 0.3).toFixed(2)}"/>`;
-      const rg = (geo.r + 5) * (1 + since * (n.again || n.fl.includes("a") ? 4 : 2.5));
-      h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.3)).toFixed(2)}"/>`;
+      for (let x = geo.left; x <= geo.x2; x += 6) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 9 + since * 110) * amp * Math.sin(Math.PI * (x - geo.left) / (geo.x2 - geo.left))).toFixed(1)}`;
+      h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${(1 - since / 0.5).toFixed(2)}"/>`;
+      const rg = (geo.r + 5) * (1 + since * (n.again || n.fl.includes("a") ? 2.6 : 1.6));
+      h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.5)).toFixed(2)}"/>`;
     }
     if (q.fret === 0 && !/[siIoOh]/.test(n.fl)) {  // open string: no bubble, the string's name lights up instead
       const lit = 1 - Math.min(1, Math.max(0, (t - n.t0) / Math.max(0.3, n.dur)));
@@ -1465,3 +1468,101 @@ try {
 try { $("#o-autopart").checked = setting("autopart", true); $("#o-prefer").value = localStorage.getItem("mp-prefer") || "any"; syncPills(); } catch (e) { /* fine */ }
 $("#o-autopart").addEventListener("change", (e) => saveSetting("autopart", e.target.checked));
 $("#o-prefer").addEventListener("change", (e) => { try { localStorage.setItem("mp-prefer", e.target.value); } catch (x) { /* fine */ } });
+
+try { document.body.classList.toggle("real-frets", setting("realfrets", false)); $("#o-realfrets").checked = setting("realfrets", false); } catch (e) { /* fine */ }
+$("#o-realfrets").addEventListener("change", (e) => { saveSetting("realfrets", e.target.checked); document.body.classList.toggle("real-frets", e.target.checked); drawPlayBoard(); });
+
+/* ---------- Song chords mode: a song sheet (chords over the lyrics), moving with the song ---------- */
+function setSheet(on) {
+  document.body.classList.toggle("sheet-mode", on);
+  $("#sheet").classList.toggle("hidden", !on);
+  $("#pl-chords").classList.toggle("on", on);
+  $("#pl-chords").textContent = on ? "Back to the tab" : "Song chords";
+  if (on) buildSheet();
+}
+// lyric lines with their start time in TAB time: the tab's own words, or LRCLIB lines (recording time + sync shift)
+function sheetLines(d) {
+  if (d.lyrics && d.lyrics.length) {
+    const out = [];
+    for (const [t, syl, nl] of d.lyrics) {
+      if (nl || !out.length) out.push({ t, words: [] });
+      out[out.length - 1].words.push([t, syl]);
+    }
+    return out.map((l) => ({ t: l.t, text: l.words.map(([, w]) => w).join(" ").replace(/- /g, ""), words: l.words }));
+  }
+  return (P.lrc || []).map(([t, line]) => ({ t: t + offsetAt(t), text: line }));
+}
+function buildSheet() {
+  const d = P.tab;
+  if (!d || d.error) { $("#sheet-lines").innerHTML = `<p class="explain">No tab for this song, so no chords to show.</p>`; return; }
+  // every chord in the song, once, as a small diagram (click for a big one)
+  const uniq = [...new Set(d.bars.map((b) => b.chord).filter(Boolean))].slice(0, 14);
+  $("#sheet-chords").innerHTML = uniq.map((c) => `<button class="cd-btn" data-chord="${esc(c)}" title="How to play ${esc(spell(c))}">${chordSVG(spell(c), 0.8)}</button>`).join("");
+  // lines: lyrics with the chord changes placed over the right word; parts of the song as headings
+  const lines = sheetLines(d), end = d.bars[d.bars.length - 1].end;
+  const changes = []; let last = "";
+  d.bars.forEach((b) => { if (b.chord && b.chord !== last) changes.push({ t: b.t, c: b.chord }); last = b.chord || last; });
+  const secs = d.bars.filter((b) => b.section).map((b) => ({ t: b.t, name: b.section }));
+  let html = "", si = 0;
+  const lineStarts = lines.length ? lines : [{ t: 0, text: "" }];
+  const rows = [];
+  // instrumental gaps (no lyrics for 6+ s) become chord-only rows, so every chord appears in order
+  let prevEnd = 0;
+  lineStarts.forEach((l, i) => {
+    const lEnd = i + 1 < lineStarts.length ? lineStarts[i + 1].t : end;
+    if (l.t - prevEnd > 6) rows.push({ t: prevEnd, end: l.t, text: "" });
+    rows.push({ t: l.t, end: lEnd, text: l.text, words: l.words });
+    prevEnd = lEnd;
+  });
+  if (end - prevEnd > 6) rows.push({ t: prevEnd, end, text: "" });
+  rows.forEach((r, i) => {
+    while (si < secs.length && secs[si].t <= r.t + 0.5) { html += `<h4 class="sh-sec">${esc(secs[si].name)}</h4>`; si++; }
+    const cs = changes.filter((c) => c.t >= r.t - 0.3 && c.t < r.end - 0.3);
+    if (!r.text) {  // instrumental: the chords in a row
+      html += `<div class="sh-line inst" data-t="${r.t}" data-end="${r.end}">${cs.map((c) => `<span class="sh-c solo" data-chord="${esc(c.c)}">${esc(spell(c.c))}</span>`).join("") || `<span class="sh-dim">(instrumental)</span>`}</div>`;
+      return;
+    }
+    // each chord sits over the word being sung when it changes (by the word's time, or by its share of the line)
+    const text = r.text, n = text.length;
+    const posOf = (t) => {
+      if (r.words && r.words.length) {
+        let acc = 0, best = 0;
+        for (const [wt, w] of r.words) { if (wt <= t + 0.05) best = acc; acc += w.replace(/-$/, "").length + (w.endsWith("-") ? 0 : 1); }
+        return Math.min(n - 1, best);
+      }
+      return Math.max(0, Math.min(n - 1, Math.round(((t - r.t) / Math.max(0.5, r.end - r.t)) * n)));
+    };
+    const marks = cs.map((c) => ({ at: posOf(c.t), c: c.c }));
+    let top = "", used = -2;
+    for (const m of marks) {
+      const at = Math.max(m.at, used + 1);
+      top += `<span class="sh-c" style="left:${at}ch" data-chord="${esc(m.c)}">${esc(spell(m.c))}</span>`;
+      used = at + spell(m.c).length + 1;
+    }
+    html += `<div class="sh-line" data-t="${r.t}" data-end="${r.end}"><div class="sh-top">${top}</div><div class="sh-text">${esc(text)}</div></div>`;
+  });
+  $("#sheet-lines").innerHTML = html;
+  P.sheetIdx = -1;
+}
+// follow the song: light up the line being sung and keep it in view
+setInterval(() => {
+  if (!document.body.classList.contains("sheet-mode") || !usingTab()) return;
+  const t = playTime(), rows = [...document.querySelectorAll("#sheet-lines .sh-line")];
+  const i = rows.findIndex((r) => t >= +r.dataset.t - 0.2 && t < +r.dataset.end - 0.2);
+  if (i === P.sheetIdx) return;
+  rows.forEach((r, k) => { r.classList.toggle("on", k === i); r.classList.toggle("past", k < i); });
+  P.sheetIdx = i;
+  if (rows[i]) rows[i].scrollIntoView({ block: "center", behavior: "smooth" });
+}, 150);
+// click a chord (in the sheet, the chord row, or the CHORD NOW box): how to play it
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-chord]");
+  if (!c) return;
+  const name = spell(c.dataset.chord);
+  $("#cd-title").textContent = name;
+  const sh = chordShape(name);
+  $("#cd-body").innerHTML = `${chordSVG(name, 2)}<p class="explain">${sh ? (sh.barre ? `A barre chord: lay your first finger flat across fret ${sh.barre.fret}, then the numbers show which finger goes where.` : "Numbers = which finger (1 = index). o = play the open string, x = don't play that string.") : "No diagram for this chord yet."}</p>`;
+  openPop("#pop-chord");
+});
+$("#pl-chord").setAttribute("data-chord", ""); $("#pl-chord").title = "Click: how to play this chord";
+setInterval(() => { $("#pl-chord").dataset.chord = P.chord || ""; }, 500);

@@ -53,7 +53,7 @@
       </div>
       <div class="pl-actions">
         <span class="out-icon" id="pl-out" title="Where the sound plays now"></span>
-        <button class="ghost" id="pl-chords" title="The song's chords with the lyrics, like a song sheet">Song chords</button>
+        <button class="ghost" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button>
         <button class="ghost" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
         <details class="dd more"><summary>More</summary><div class="dd-menu right">
           <button class="chip-t" id="pl-options">Options</button>
@@ -82,11 +82,25 @@
       <span class="tab-sync hidden" id="tab-sync"></span>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
       <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
+    <div class="sheet hidden" id="sheet"><div class="sheet-chords" id="sheet-chords"></div><div class="sheet-lines" id="sheet-lines"></div></div>
     <div class="highway pl-body hidden" data-body="tab" id="highway"><canvas id="hw-canvas"></canvas></div>
     <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
     </div>
+
+    <details class="howto"><summary>How to read the tab</summary><div class="howto-grid">
+      <span><b>7</b> play fret 7 on that string</span>
+      <span><b>(7)</b> still ringing from before: don't pick it again</span>
+      <span><b>x</b> muted: a scratchy, deadened hit</span>
+      <span><b>&lt;12&gt;</b> harmonic: touch the string lightly over the fret</span>
+      <span><svg width="34" height="14"><path d="M3 12 Q17 0 31 12" class="tq-arc"/></svg> hammer-on / pull-off: the next note without picking</span>
+      <span><svg width="34" height="14"><line x1="4" y1="12" x2="30" y2="2" class="tq-slide"/></svg> slide along the string</span>
+      <span><svg width="22" height="16"><path d="M2 14 Q11 14 11 3" class="tq-bend"/><path d="M7 8 L11 3 L15 8" class="tq-head"/></svg> bend the string up</span>
+      <span><svg width="34" height="12"><path d="M2 6 Q5 1 8 6 Q11 11 14 6 Q17 1 20 6 Q23 11 26 6" class="tq-vib"/></svg> vibrato: wobble the note</span>
+      <span><b>P.M.</b> palm mute: rest your picking hand on the strings</span>
+      <span><span class="lg held"></span> fretboard: fingers still holding the chord shape</span>
+    </div></details>
 
     <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
       <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE FRETBOARD</span><button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
@@ -116,6 +130,7 @@
       <div class="o-item"><span class="o-label">Notes</span>
         <select id="o-scale"><option value="pent">5 safest</option><option value="full">All 7 of the key</option><option value="blues">Bluesy</option><option value="chord">Only the chord now</option></select></div>
       <p class="o-help" id="o-scale-help"></p>
+      <label class="o-switch"><input type="checkbox" id="o-realfrets"><i></i><span>Real guitar fret spacing <em>(off = an even grid, easier to read)</em></span></label>
       <div class="o-item"><span class="o-label">Dots show</span>
         <select id="o-labels"><option value="names">Note names</option><option value="intervals">Note jobs (R, b3, 5)</option></select></div>
       <div class="o-item"><span class="o-label">Part of the neck</span>
@@ -157,6 +172,10 @@
     <p class="explain" id="ver-intro">Songsterr often has several tabs of the same song. Pick the one whose guitars and length match your recording.</p>
     <div class="ver-list" id="ver-list"></div>
     <form class="ver-paste" id="ver-paste"><input id="ver-url" placeholder="Or paste any Songsterr tab link..." autocomplete="off"><button type="submit">Use this link</button></form>
+  </div></div>
+  <div class="pop hidden" id="pop-chord"><div class="pop-card cd-pop">
+    <div class="pop-head"><b id="cd-title">Chord</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <div id="cd-body"></div>
   </div></div>
   <div class="pop hidden" id="pop-chords"><div class="pop-card wide">
     <div class="pop-head"><b>The whole song's chords</b><button class="ghost icon" data-close>&#10005;</button></div>
@@ -222,6 +241,7 @@
   </section>
 
   <div class="toast hidden" id="toast"></div>
+  <script src="/static/chords.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
