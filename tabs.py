@@ -335,7 +335,7 @@ def _key(tracks_notes, bars=None, wn=None):
 
 def load(song_id, lead_index=None):
     """Everything the fretboard needs to follow the song's lead guitar. Cached per song + track."""
-    cache = CACHE / f"v14-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
+    cache = CACHE / f"v15-{song_id}-{lead_index if lead_index is not None else 'auto'}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     meta = _json(f"https://www.songsterr.com/api/meta/{song_id}")
@@ -388,7 +388,9 @@ def load(song_id, lead_index=None):
         "events": _events(lt, times),
         "beats": _tab_beats(lt, times),
         "print": _fingerprint([lt] + harmony + ([bass] if bass else []), times),
-        "lyrics": _lyrics([get(i) for i, t in enumerate(tracks) if re.search(r"vocal|voice|sing", (t.get("name") or "") + " " + (t.get("instrument") or ""), re.I)][:2], times),
+        # the words can sit in any part (usually the singer's): singers first, then the rest
+        "lyrics": _lyrics([get(i) for i in sorted(range(len(tracks)), key=lambda i: not re.search(
+            r"vocal|voice|sing", (tracks[i].get("name") or "") + " " + (tracks[i].get("instrument") or ""), re.I))][:6], times),
         "print_step": STEP,
         "attacks": _attacks([(get(i), 2.0 if "drum" in (t.get("instrument") or "").lower() else 1.0)
                              for i, t in enumerate(tracks) if re.search(r"guitar|bass|drum|piano|organ|keys",

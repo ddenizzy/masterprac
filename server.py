@@ -197,6 +197,15 @@ def sync_now(song_id):
     return jsonify({"result": r, "took": round(time.time() - t0, 2), "error": listen.notes().get("error")})
 
 
+@app.get("/api/lyrics")
+def lyrics_now():
+    """Timed lyric lines for the playing recording (LRCLIB), for songs whose tab has no lyrics."""
+    p = h.now_playing()
+    if not p.get("title"):
+        return jsonify({"lines": []})
+    return jsonify({"lines": h.lrclib_lyrics(p["title"], p["artist"], p.get("duration") or 0), "title": p["title"]})
+
+
 @app.get("/api/now/versions")
 def now_versions():
     """Every Songsterr version of the playing song, with what's in it, to choose from."""

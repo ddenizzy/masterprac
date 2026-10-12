@@ -253,12 +253,19 @@ async function loadTab(id, track) {
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
   if (P.songId !== id) return;  // the song changed meanwhile
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
-  SYNC.samples = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
+  SYNC.samples = []; SYNC.recent = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
   $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
+  P.lrc = [];
   drawTab(); buildMap(); headsUp(); drawPlayBoard();
+  if (!(d.lyrics && d.lyrics.length)) {  // no words in the tab: timed lines for the recording itself (LRCLIB)
+    try {
+      const l = await (await fetch("/api/lyrics")).json();
+      if (P.songId === id && l.lines && l.lines.length) { P.lrc = l.lines; drawTab(); }
+    } catch (e) { /* no lyrics */ }
+  }
 }
 
 // "Thom Yorke | Takamine EN10C | Rhythm Guitar" -> "Thom Yorke · Rhythm Guitar"
@@ -345,6 +352,11 @@ function drawTab() {
   (TSHOW.lyrics ? d.lyrics || [] : []).forEach(([t, syl, nl], i) => {
     h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${t * PX + 6}" y="${yEnd + 40}">${esc(syl)}</text>`;
   });
+  // timed lines from LRCLIB: their times are the recording's, so they sit at recording time + the sync shift
+  P.lrcDrawnAt = P.offset;
+  (TSHOW.lyrics && !(d.lyrics && d.lyrics.length) ? P.lrc || [] : []).forEach(([t, line], i) => {
+    h += `<text class="tlyric first" id="lr${i}" x="${(t + P.offset) * PX + 6}" y="${yEnd + 40}">${esc(line)}</text>`;
+  });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
   $("#tab-names").innerHTML = `<rect class="tnames-bg" x="0" y="${y0 - 10}" width="24" height="${yEnd - y0 + 20}"/>` +
@@ -393,6 +405,11 @@ function playTick() {
     document.getElementById("tb" + P.beatIdx)?.classList.remove("on");
     if (bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1]) document.getElementById("tb" + bt)?.classList.add("on");
     P.beatIdx = bt;
+  }
+  if (P.lrc && P.lrc.length && !(d.lyrics && d.lyrics.length)) {
+    if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
+    const li = lastAt(P.lrc, t - P.offset, (x) => x[0]);
+    if (li !== P.lrIdx) { document.getElementById("lr" + P.lrIdx)?.classList.remove("on"); document.getElementById("lr" + li)?.classList.add("on"); P.lrIdx = li; }
   }
   if (d.lyrics && d.lyrics.length) {  // light up the syllable being sung
     const li = lastAt(d.lyrics, t, (x) => x[0]);
@@ -573,7 +590,10 @@ async function syncListen() {
   SYNC.score = r.note_score;
   const sure = r.note_score > 0.4 && r.note_conf > 0.12;
   if (!sure) { if (SYNC.state !== "locked") syncStatus("Listening to sync... (not sure yet)"); return; }
-  const target = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  const raw = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  // the middle of the last 3 answers: one odd reading is ignored, a real change wins after 2 checks
+  SYNC.recent = [...(SYNC.recent || []), raw].slice(-3);
+  const sorted = [...SYNC.recent].sort((a, b) => a - b), target = sorted[Math.floor(sorted.length / 2)];
   if (r.shift !== (SYNC.shift || 0)) {
     SYNC.shift = r.shift;
     const up = r.shift <= 6 ? r.shift : r.shift - 12;

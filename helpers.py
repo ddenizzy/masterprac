@@ -298,3 +298,35 @@ def songsterr_matches(title, artist):
         if ht and close and (not a or _same_artist(a, ha)) and hit.get("hasPlayer", True):
             out.append({"id": hit["songId"], "title": hit["title"], "artist": hit["artist"], "url": songsterr_url(hit)})
     return out
+
+
+# ---------- timed lyrics from LRCLIB (free, open: lrclib.net) when the tab has none ----------
+def lrclib_lyrics(title, artist, duration=0):
+    """Lines with their time in the RECORDING: [[seconds, "line"], ...] or []. Cached in data/lyrics.json."""
+    key = f"{title}|{artist}|{round(duration or 0)}".lower()
+    cache = load("lyrics", {})
+    if key in cache:
+        return cache[key]
+    ua = {"User-Agent": "MasterPrac (personal guitar practice app)"}
+    found = None
+    try:
+        r = requests.get("https://lrclib.net/api/get", params={"artist_name": artist, "track_name": title}, headers=ua, timeout=10)
+        if r.ok and r.json().get("syncedLyrics") and (not duration or abs((r.json().get("duration") or 0) - duration) <= 6):
+            found = r.json()
+        if not found:  # same song, other versions: the one whose length matches the recording
+            hits = requests.get("https://lrclib.net/api/search", params={"artist_name": artist, "track_name": title},
+                                headers=ua, timeout=10).json()
+            hits = [x for x in hits if x.get("syncedLyrics")]
+            if duration:
+                hits = [x for x in hits if abs((x.get("duration") or 0) - duration) <= 6]
+            found = hits[0] if hits else None
+    except (requests.RequestException, ValueError):
+        return []  # offline: try again next time
+    lines = []
+    for raw in (found or {}).get("syncedLyrics", "").splitlines():
+        m = re.match(r"\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)", raw)
+        if m and m.group(3).strip():
+            lines.append([round(int(m.group(1)) * 60 + float(m.group(2)), 2), m.group(3).strip()])
+    cache[key] = lines
+    save("lyrics", cache)
+    return lines
