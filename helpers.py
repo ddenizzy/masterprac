@@ -251,6 +251,12 @@ def now_playing():
         d = json.loads(out.strip().splitlines()[-1])
     except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
         return {"playing": False, "title": ""}
+    # a paused video in a browser can still hold macOS's "Now Playing": if Spotify is playing, Spotify wins
+    if not d.get("rate"):
+        sp = spotify_position()
+        if sp.get("state") == "playing" and sp.get("title"):
+            d = {"title": sp["title"], "artist": sp["artist"], "app": "Spotify", "elapsed": sp["pos"], "rate": 1.0,
+                 "now": time.time(), "timestamp": time.time(), "duration": float(_osa('tell application "Spotify" to return (duration of current track) / 1000') or 0)}
     if not d.get("title"):
         return {"playing": False, "title": ""}
     title, artist = clean_song(d["title"], d.get("artist", ""))
