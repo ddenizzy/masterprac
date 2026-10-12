@@ -284,3 +284,25 @@ body.pl-focus .tabstrip { height: 230px; }
 .pl-ph .tab-part select { background: var(--card); color: var(--text); border-color: var(--line); }
 .pl-ph .tab-part ~ .ph-toggle { margin-left: 8px; }
 .pl-ph { flex-wrap: wrap; row-gap: 6px; }
+
+/* one lyrics line: inside the tab, under the strings (bigger, the sung part in red) */
+.tlyric { font: 700 17px var(--font); fill: #3d352d; }
+.tlyric.first { fill: #1c1712; font-weight: 800; }
+.tlyric.on { fill: #e8461a; }
+
+/* techniques on the fretboard */
+.board .tech-arrow line { stroke: #ffd27a; stroke-width: 4; stroke-linecap: round; }
+.board .tech-arrow path { fill: #ffd27a; }
+.board .tech-arrow.hammer line { stroke-dasharray: 7 5; }
+.board .tech-arrow text, .board .tech-bend text { fill: #ffd27a; font: 800 12px var(--font); text-anchor: middle; }
+.board .tech-bend text { text-anchor: start; }
+.board .tech-bend path { stroke: #ffd27a; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.board .tech-badge rect { fill: #ffd27a; }
+.board .tech-badge text { fill: #1a1208; font: 800 11px var(--font); text-anchor: middle; }
+
+/* "this part rests" lives in the tab's header row, never over the notes */
+.pl-ph .tab-rest { position: static; transform: none; display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px;
+  border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--text); font-size: 13px; font-weight: 600; }
+.pl-ph .tab-rest.hidden { display: none; }
+.pl-ph .tab-rest button.ghost { padding: 3px 10px; font-size: 12px; border-radius: 999px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }

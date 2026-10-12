@@ -196,7 +196,24 @@ function fretboard(svg, o) {
     return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? r + 5 : r + 3}"/><text x="${x}" y="${sy(s) + 5}">${f}</text></g>`;
   };
   for (const [s, f] of o.next || []) g += spot(s, f, "next");
-  for (const [s, f] of o.now || []) g += spot(s, f, "play");
+  // techniques on the notes played now: an arrow along the string to where a slide / hammer-on goes, badges for the rest
+  const xAt = (f) => (f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2);
+  for (const [s, f, fl = ""] of o.now || []) {
+    if (s >= strings) continue;
+    const to = (o.ahead || o.next || []).find((n) => n[0] === s && n[1] !== f);  // where the slide / hammer-on goes
+    if (to && (fl.includes("s") || fl.includes("h"))) {
+      const x1 = xAt(f), x2 = xAt(to[1]), y = sy(s), dir = x2 > x1 ? 1 : -1, r2 = r + 6;
+      g += `<g class="tech-arrow ${fl.includes("s") ? "slide" : "hammer"}"><line x1="${x1 + dir * r2}" y1="${y}" x2="${x2 - dir * r2}" y2="${y}"/>
+        <path d="M${x2 - dir * r2} ${y} l${-dir * 9} -6 v12 z"/>
+        <text x="${(x1 + x2) / 2}" y="${y - 9}">${fl.includes("s") ? "slide" : "hammer-on"}</text></g>`;
+    }
+    if (fl.includes("b")) g += `<g class="tech-bend"><path d="M${xAt(f)} ${sy(s) - r - 6} v-16 m-6 6 l6 -6 l6 6"/><text x="${xAt(f) + 10}" y="${sy(s) - r - 12}">bend</text></g>`;
+  }
+  for (const [s, f, fl = ""] of o.now || []) {
+    g += spot(s, f, "play");
+    const badge = fl.includes("x") ? "x" : fl.includes("H") ? "harm" : fl.includes("v") ? "~" : fl.includes("h") ? "h" : "";
+    if (badge && s < strings) g += `<g class="tech-badge"><rect x="${xAt(f) + r - 2}" y="${sy(s) - r - 14}" width="${badge.length * 8 + 10}" height="16" rx="8"/><text x="${xAt(f) + r + 3 + badge.length * 4}" y="${sy(s) - r - 2}">${badge}</text></g>`;
+  }
   svg.innerHTML = g;
 }
 
@@ -281,7 +298,9 @@ function partName(t) {
 // is the followed part silent around bar bi? then say so, and offer the guitar that IS playing
 function restNote(bi) {
   const d = P.tab, me = d.tracks.find((t) => t.i === d.lead), box = $("#tab-rest");
-  if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); return; }
+  const hint = $("#tab-hint");
+  if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); hint.classList.remove("hidden"); return; }
+  hint.classList.add("hidden");
   let n = 0; while (bi + n < me.active.length && me.active[bi + n] !== "1") n++;
   const other = d.tracks.find((t) => t.i !== d.lead && t.active && t.active[bi] === "1");
   const left = bi + n >= me.active.length;
@@ -403,15 +422,14 @@ function playTick() {
   const nextBar = d.bars.slice(bi + 1).find((b) => b.chord && b.chord !== bar.chord);
   $("#pl-in").textContent = nextBar ? `in ${Math.max(0, nextBar.t - t).toFixed(1)} s` : "";
   // the note(s) sounding now and the ones coming in the next ~1.2 s (Learn mode)
+  const bt = lastAt(d.beats, t, (b) => b[0]);
   const ei = lastAt(d.events, t, (e) => e[0]);
   const cur = ei >= 0 && t < d.events[ei][0] + d.events[ei][1] ? d.events[ei] : null;
-  const bt = lastAt(d.beats, t, (b) => b[0]);
   if (bt !== P.beatIdx) {
     document.getElementById("tb" + P.beatIdx)?.classList.remove("on");
     if (bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1]) document.getElementById("tb" + bt)?.classList.add("on");
     P.beatIdx = bt;
   }
-  lyricBar(d, t);
   if (P.lrc && P.lrc.length && !(d.lyrics && d.lyrics.length)) {
     if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
     const li = lastAt(P.lrc, t - P.offset, (x) => x[0]);
@@ -421,11 +439,13 @@ function playTick() {
     const li = lastAt(d.lyrics, t, (x) => x[0]);
     if (li !== P.lyIdx) { document.getElementById("ly" + P.lyIdx)?.classList.remove("on"); document.getElementById("ly" + li)?.classList.add("on"); P.lyIdx = li; }
   }
-  const sig = `${bi}|${notesShown() ? ei + "|" + (cur ? 1 : 0) : ""}`;
+  const sig = `${bi}|${notesShown() ? bt + "|" + ei + "|" + (cur ? 1 : 0) : ""}`;
   if (sig === P.sig) return;
   P.sig = sig;
-  P.nowNotes = cur ? cur[2] : [];
-  P.nextNotes = d.events.slice(ei + 1).filter((e) => e[0] - t < 1.2).slice(0, 4).flatMap((e) => e[2]);
+  // from the tab's beats (they carry techniques: slides, hammer-ons, bends...): [string, fret, flags]
+  const bnow = bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1] ? d.beats[bt] : null;
+  P.nowNotes = bnow ? bnow[3].filter((n) => !n[2].includes("t")) : (cur ? cur[2].map(([a, b]) => [a, b, ""]) : []);
+  P.nextNotes = d.beats.slice(bt + 1).filter((b) => b[0] - t < 1.2 && b[3].length).slice(0, 4).flatMap((b) => b[3].filter((n) => !n[2].includes("t")));
   if (bi !== P.barIdx) {
     P.barIdx = bi;
     const section = d.bars.slice(0, bi + 1).reverse().find((b) => b.section)?.section || "Start";
@@ -439,35 +459,6 @@ function playTick() {
   } else drawPlayBoard();
 }
 setInterval(playTick, 50);  // a timer, not animation frames: keeps going when the window is in the background
-
-// the lyrics bar under the tab: the line being sung (big) + the next line
-function lyricLines(d) {  // tab syllables joined into lines: [[start time, "line"], ...]
-  if (d.lyrics && d.lyrics.length) {
-    if (P.lyLinesFor !== d) {
-      const out = [];
-      for (const [t, syl, nl] of d.lyrics) {
-        if (nl || !out.length) out.push([t, ""]);
-        const cur = out[out.length - 1];
-        cur[1] += cur[1] && !cur[1].endsWith("-") ? " " + syl : syl;
-      }
-      P.lyLines = out.map(([t, l]) => [t, l.replace(/-(?=\S)/g, "").replace(/- /g, "")]); P.lyLinesFor = d;
-    }
-    return { lines: P.lyLines, shift: 0 };
-  }
-  return { lines: P.lrc || [], shift: P.offset };  // recording times: + the sync shift
-}
-function lyricBar(d, t) {
-  const bar = $("#lyric-bar"), { lines, shift } = lyricLines(d);
-  if (!TSHOW.lyrics || !lines.length) { bar.classList.add("hidden"); return; }
-  bar.classList.remove("hidden");
-  const i = lastAt(lines, t - shift, (x) => x[0]);
-  if (i === P.lyBarIdx) return;
-  P.lyBarIdx = i;
-  const now = i >= 0 ? lines[i] : null, next = lines[i + 1];
-  // a line counts as "being sung" for up to 8 s; after that, show what's coming
-  $("#lyric-now").textContent = now && t - shift - now[0] < 8 ? now[1] : "";
-  $("#lyric-next").textContent = next ? `next: ${next[1]}` : "";
-}
 
 function setChord(name, next) {
   P.chord = name;
@@ -510,7 +501,8 @@ function foot(next) {
   if (!k) { $("#pl-foot").innerHTML = ""; return; }
   const chip = (pc) => `<span class="${pc === k.root ? "root" : c && c.tones.includes(pc) ? "chord" : ""}">${nn(pc)}</span>`;
   if (P.mode === "learn") {
-    const strs = P.nowNotes.map(([s, f]) => `string ${s + 1} fret ${f}`).join(", ");
+    const how = (fl = "") => fl.includes("s") ? " (slide)" : fl.includes("h") ? " (hammer-on / pull-off)" : fl.includes("b") ? " (bend)" : fl.includes("v") ? " (vibrato)" : fl.includes("x") ? " (muted)" : "";
+    const strs = P.nowNotes.map(([s, f, fl]) => `string ${s + 1} fret ${f}${how(fl)}`).join(", ");
     $("#pl-foot").innerHTML = `<div><span class="kicker">PLAY NOW</span> ${strs ? `<b>${strs}</b>` : `<span class="sub">rest</span>`}</div>
       <div class="sub"><i class="dot play"></i>red = play this now &nbsp; <i class="dot next"></i>dashed = coming next &nbsp; numbers = frets &nbsp; string 1 = thinnest</div>`;
     return;
@@ -540,7 +532,7 @@ function drawPlayBoard() {
     chordTones: sh.chord && c ? c.tones : [], labels: $("#o-labels").value, area: $("#o-area").value,
     dim: notesShown() && (sh.scale || sh.chord),  // the guitarist's notes stand out over faded safe notes
     frets: notesShown() && usingTab() ? Math.min(22, Math.max(15, ...P.tab.events.flatMap((e) => e[2].map((x) => x[1] + 1)))) : 15,
-    now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [] });
+    now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [], ahead: P.nextNotes });
   if (P.mode === "learn") foot();
 }
 showChips();

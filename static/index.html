@@ -65,7 +65,8 @@
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
 
-    <div class="pl-ph" data-panel="tab"><span class="kicker">TAB</span><span class="sub ph-hint">scrolls with the music</span>
+    <div class="pl-ph" data-panel="tab"><span class="kicker">TAB</span><span class="sub ph-hint" id="tab-hint">scrolls with the music</span>
+      <span class="tab-rest hidden" id="tab-rest"></span>
       <span class="show-row"><span class="kicker">SHOW</span>
         <button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
         <button class="chip-t" data-tshow="chords" title="Chord names above the tab">Chords</button>
@@ -80,10 +81,7 @@
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
       <div class="tab-sync hidden" id="tab-sync"></div>
-      <div class="tab-rest hidden" id="tab-rest"></div>
     </div>
-
-    <div class="lyric-bar hidden" id="lyric-bar"><b id="lyric-now"></b><span id="lyric-next"></span></div>
 
     <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
       <span class="show-row"><span class="kicker">SHOW</span>
