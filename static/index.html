@@ -73,15 +73,17 @@
         <button class="chip-t" data-tshow="muted" title="Muted, scratchy notes (x)">Muted notes</button>
         <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button>
       </span>
+      <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
       <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
     <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
       <div class="tab-sync hidden" id="tab-sync"></div>
-      <div class="tab-part hidden" id="tab-partbox"><span class="kicker">FOLLOWING</span><select id="tab-part" title="Which guitar part the tab and Learn mode follow"></select></div>
       <div class="tab-rest hidden" id="tab-rest"></div>
     </div>
+
+    <div class="lyric-bar hidden" id="lyric-bar"><b id="lyric-now"></b><span id="lyric-next"></span></div>
 
     <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
       <span class="show-row"><span class="kicker">SHOW</span>

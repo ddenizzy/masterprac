@@ -221,7 +221,7 @@ const playTime = () => playerPos() - ((P.info && P.info.latency) || 0) + P.offse
 async function pollNow() {
   if (tab !== "play") return;
   let p;
-  try { p = await (await fetch("/api/now")).json(); } catch (e) { return; }
+  try { p = await (await fetch(SYNC.on ? "/api/now?listen=1" : "/api/now")).json(); } catch (e) { return; }
   const changed = !P.info || P.info.title !== p.title || P.info.artist !== p.artist;
   P.info = p;
   $("#pl-app").textContent = p.title ? `${p.playing ? "PLAYING" : "PAUSED"} IN ${(p.app || "AN APP").toUpperCase()}` : "NOTHING PLAYING";
@@ -258,7 +258,12 @@ async function loadTab(id, track) {
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
   $("#tab-partbox").classList.toggle("hidden", d.tracks.length < 1);
-  P.lrc = [];
+  // up to 4 parts: big buttons (the one you follow filled in); more: a big dropdown
+  const many = d.tracks.length > 4;
+  $("#tab-part").classList.toggle("hidden", !many);
+  $("#part-btns").innerHTML = many ? "" : d.tracks.map((t) => `<button class="part-b ${t.i === d.lead ? "on" : ""}" data-part="${t.i}"
+    title="${esc(t.name)}">${esc(partName(t))}${t.played != null ? `<i>${t.played}/${d.bars.length}</i>` : ""}</button>`).join("");
+  P.lrc = []; P.lyBarIdx = undefined;
   drawTab(); buildMap(); headsUp(); drawPlayBoard();
   if (!(d.lyrics && d.lyrics.length)) {  // no words in the tab: timed lines for the recording itself (LRCLIB)
     try {
@@ -406,6 +411,7 @@ function playTick() {
     if (bt >= 0 && t < d.beats[bt][0] + d.beats[bt][1]) document.getElementById("tb" + bt)?.classList.add("on");
     P.beatIdx = bt;
   }
+  lyricBar(d, t);
   if (P.lrc && P.lrc.length && !(d.lyrics && d.lyrics.length)) {
     if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
     const li = lastAt(P.lrc, t - P.offset, (x) => x[0]);
@@ -433,6 +439,35 @@ function playTick() {
   } else drawPlayBoard();
 }
 setInterval(playTick, 50);  // a timer, not animation frames: keeps going when the window is in the background
+
+// the lyrics bar under the tab: the line being sung (big) + the next line
+function lyricLines(d) {  // tab syllables joined into lines: [[start time, "line"], ...]
+  if (d.lyrics && d.lyrics.length) {
+    if (P.lyLinesFor !== d) {
+      const out = [];
+      for (const [t, syl, nl] of d.lyrics) {
+        if (nl || !out.length) out.push([t, ""]);
+        const cur = out[out.length - 1];
+        cur[1] += cur[1] && !cur[1].endsWith("-") ? " " + syl : syl;
+      }
+      P.lyLines = out.map(([t, l]) => [t, l.replace(/-(?=\S)/g, "").replace(/- /g, "")]); P.lyLinesFor = d;
+    }
+    return { lines: P.lyLines, shift: 0 };
+  }
+  return { lines: P.lrc || [], shift: P.offset };  // recording times: + the sync shift
+}
+function lyricBar(d, t) {
+  const bar = $("#lyric-bar"), { lines, shift } = lyricLines(d);
+  if (!TSHOW.lyrics || !lines.length) { bar.classList.add("hidden"); return; }
+  bar.classList.remove("hidden");
+  const i = lastAt(lines, t - shift, (x) => x[0]);
+  if (i === P.lyBarIdx) return;
+  P.lyBarIdx = i;
+  const now = i >= 0 ? lines[i] : null, next = lines[i + 1];
+  // a line counts as "being sung" for up to 8 s; after that, show what's coming
+  $("#lyric-now").textContent = now && t - shift - now[0] < 8 ? now[1] : "";
+  $("#lyric-next").textContent = next ? `next: ${next[1]}` : "";
+}
 
 function setChord(name, next) {
   P.chord = name;
@@ -580,10 +615,14 @@ const cos = (a, b) => { let d = 0, na = 0, nb = 0; for (let i = 0; i < 12; i++) 
 // then the attacks of every instrument (drums, bass, guitars) to within ~10 ms
 async function syncListen() {
   if (tab !== "play" || !SYNC.on || !usingTab() || !(P.info && P.info.playing) || SYNC.busy) return;
+  // every second until it has locked on, then every 2.5 s
+  if (SYNC.state === "locked" && performance.now() - (SYNC.lastAsk || 0) < 2400) return;
+  SYNC.lastAsk = performance.now();
   SYNC.busy = true;
   let d;
   try { d = await (await fetch(`/api/sync/${P.tab.song_id}`)).json(); } catch (e) { SYNC.busy = false; return; }
   SYNC.busy = false;
+  SYNC.log = [...(SYNC.log || []), `${((performance.now() - (SYNC.t0 || 0)) / 1000).toFixed(1)}s:${d.result ? `heard=${d.result.heard_s} score=${d.result.note_score} conf=${d.result.note_conf} att=${d.result.attack_conf} off=${d.result.offset}` : "none"}`].slice(-12);
   if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); }
   const r = d.result;
   if (!r) { if (SYNC.state !== "locked") syncStatus(d.error ? "Can't hear the music: see Heads up" : "Listening to sync..."); return; }
@@ -607,7 +646,7 @@ async function syncListen() {
   SYNC.state = "locked";
   syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s${r.attack_conf >= 1.8 ? " · precise" : ""}`, true);
 }
-setInterval(syncListen, 2500);
+setInterval(syncListen, 1000);
 function syncStatus(text, ok) {
   const el = $("#tab-sync");
   el.textContent = text; el.classList.toggle("ok", !!ok); el.classList.toggle("hidden", !SYNC.on || !usingTab());

@@ -58,7 +58,7 @@ def _unit(m):
 def solve(tab, pos_at, seconds=20):
     """tab: tabs.load() output. pos_at(clock time) -> the player's position then. Returns a dict or None."""
     x, t_end, rate = listen.recent(seconds)
-    if len(x) < rate * 8 or float(np.sqrt(np.mean(x ** 2))) < 0.003:
+    if len(x) < rate * min(3, seconds) or float(np.sqrt(np.mean(x ** 2))) < 0.003:  # a first answer after 3 s, better as it hears more
         return None
     flux = _features(x, rate)
     centres, chroma = _chroma_blocks(x, rate)
@@ -103,7 +103,8 @@ def solve(tab, pos_at, seconds=20):
     if len(att):
         fl = (flux - flux.mean()) / (flux.std() + 1e-9)
         sigma = 0.025
-        offs = np.arange(coarse - 0.4, coarse + 0.4001, 0.01)
+        # within 0.25 s of the note match: wider and it can snap to the neighbouring beat
+        offs = np.arange(coarse - 0.25, coarse + 0.2501, 0.01)
         res = []
         for o in offs:
             t = pos + o

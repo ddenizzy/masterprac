@@ -1,6 +1,7 @@
 """MasterPrac's local server: the panel page and its data (only this Mac, only MasterPrac's own pages)."""
 import logging
 import threading
+import time
 from datetime import datetime
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -162,8 +163,14 @@ def best_version(title, artist):
 
 @app.get("/api/now")
 def now():
-    """What's playing in any app + its Songsterr version (the most complete one, if Songsterr has that song)."""
+    """What's playing in any app + its Songsterr version (the most complete one, if Songsterr has that song).
+    ?listen=1 (the Play page, auto-sync on): keep MasterPrac's ears on, so sound is already saved up for syncing."""
     p = h.now_playing()
+    if request.args.get("listen") and p.get("playing"):
+        import listen
+        if listen._state["proc"] is None:
+            print(f"  now?listen {time.strftime('%H:%M:%S')}: starting ears", flush=True)
+        listen.listen()
     if p.get("title"):
         k = f"{p['title']}|{p['artist']}".lower()
         with _match_lock:  # the page asks every second: look it up once
@@ -193,7 +200,9 @@ def sync_now(song_id):
         return jsonify({"result": None, "why": "nothing playing"})
     pos_at = lambda c: p["pos"] + ((c - p["at"]) if p["playing"] else 0)
     t0 = time.time()
-    r = sync.solve(tab, pos_at)
+    r = sync.solve(tab, pos_at, seconds=request.args.get("seconds", default=20, type=float))
+    print(f"  sync {time.strftime('%H:%M:%S')} heard={listen.recent(20)[0].size / max(1, listen.RATE):.1f}s -> "
+          f"{'offset %+.2f conf %.2f' % (r['offset'], r['note_conf']) if r else 'no answer yet'}", flush=True)
     return jsonify({"result": r, "took": round(time.time() - t0, 2), "error": listen.notes().get("error")})
 
 

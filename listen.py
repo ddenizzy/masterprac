@@ -93,7 +93,7 @@ def _start():
                 break
             _feed(np.frombuffer(chunk[: len(chunk) // 4 * 4], dtype=np.float32))
     threading.Thread(target=read, daemon=True).start()
-    print(f"  ears: listening (audio only, {first[3:]})", flush=True)
+    print(f"  ears: listening {time.strftime('%H:%M:%S')} (audio only, {first[3:]})", flush=True)
 
 
 def stop():
