@@ -1110,12 +1110,21 @@ function fxBeat(d, bt, bnow) {
   const nowMs = performance.now();
   FX.ringing = [...(FX.ringing || []).filter((r) => nowMs - r.at < 1600),
     ...before.filter((b) => b.bf && b.bf.includes("lr") && b._q).map((b) => ({ x: b._q.x, y: b._q.y, s: b.s, f: b._q.fret, at: nowMs }))];
-  FX.notes = bnow[3].filter((n) => !n[2].includes("t")).map(([s, f, fl]) => {
+  const sounding = bnow[3].filter((n) => !n[2].includes("t"));
+  // the same chord strummed again (8th-note strumming): a quiet pulse, not a fresh "new notes" burst every beat
+  const key = (arr) => arr.map((n) => `${n[0]}:${n[1]}`).sort().join(" ");
+  const rep = sounding.length >= 2 && key(sounding) === key(before.map((b) => [b.s, b.f]));
+  const gap = Math.max(0.12, (after ? after[0] : t0 + dur) - t0);  // time until the next hit: effects fit inside it
+  const down = /\bsd\b/.test(bnow[4] || ""), strummed = /\bs[du]\b/.test(bnow[4] || "") || sounding.length >= 3;
+  const order = [...sounding].sort((a, b) => (down ? b[0] - a[0] : a[0] - b[0])).map((n) => n[0]);  // thick -> thin when down
+  FX.notes = sounding.map(([s, f, fl]) => {
     const to = after && after[3].find((n) => n[0] === s);
-    const again = before.some((b) => b.s === s && b.f === f);  // the same note picked again
+    const again = !rep && sounding.length === 1 && before.some((b) => b.s === s && b.f === f);  // one note picked again
     const prev = FX.last[s] ?? Object.values(FX.last).sort((a, b) => b.t - a.t)[0];
-    return { s, f, fl, bf: bnow[4] || "", t0, dur: Math.max(0.08, dur), to: to ? to[1] : null, again, pickedAt: performance.now(),
-      from: prev && t0 - prev.t < 0.8 ? prev : null };  // where the finger comes from (for the fast flight)
+    const delay = strummed ? order.indexOf(s) * Math.min(0.014, gap / 24) : 0;  // a strum reaches the strings one by one
+    return { s, f, fl, bf: bnow[4] || "", t0, dur: Math.max(0.08, dur), to: to ? to[1] : null, again, rep, gap, delay,
+      pickedAt: performance.now() + delay * 1000,
+      from: !rep && prev && t0 - prev.t < 0.8 ? prev : null };  // where the finger comes from (for the fast flight)
   });
 }
 const ease = (p) => (p < 0 ? 0 : p > 1 ? 1 : p * p * (3 - 2 * p));
@@ -1199,13 +1208,14 @@ function fxDraw() {
   // strum: a sweeping arrow across the chord's strings (down = from the thick string to the thin one)
   const strum = FX.notes.find((n) => /\bs[du]\b/.test(n.bf || ""));
   if (strum && FX.notes.length >= 2) {
-    const ages = (now - strum.pickedAt) / 1000, down = /\bsd\b/.test(strum.bf);
-    if (ages < 0.45) {
+    const ages = (now - strum.pickedAt + strum.delay * 1000) / 1000, down = /\bsd\b/.test(strum.bf), life = Math.min(0.45, strum.gap * 0.85);
+    if (ages < life) {
       const ss = FX.notes.map((n) => n.s), lo = Math.max(...ss), hi = Math.min(...ss);
       const xs = Math.min(...FX.notes.map((n) => fretX(geo, n.f))) - geo.r * 2.4;
       const yA = geo.sy(down ? lo : hi), yB = geo.sy(down ? hi : lo), k = ease(ages / 0.18), yt = yA + (yB - yA) * k;
-      h += `<g class="fx-strum" opacity="${(1 - ease((ages - 0.25) / 0.2)).toFixed(2)}"><line x1="${xs}" y1="${yA}" x2="${xs}" y2="${yt}"/>
-        <path d="M${xs} ${yt} l-7 ${down ? 10 : -10} h14 z"/><text x="${xs - 12}" y="${(yA + yB) / 2}">${down ? "strum down" : "strum up"}</text></g>`;
+      const k2 = ease(ages / Math.min(0.18, life * 0.5)), yt2 = yA + (yB - yA) * k2;
+      h += `<g class="fx-strum ${strum.rep ? "rep" : ""}" opacity="${((strum.rep ? 0.6 : 1) * (1 - ease((ages - life * 0.55) / (life * 0.45)))).toFixed(2)}"><line x1="${xs}" y1="${yA}" x2="${xs}" y2="${yt2}"/>
+        <path d="M${xs} ${yt2} l-7 ${down ? 10 : -10} h14 z"/>${strum.rep ? "" : `<text x="${xs - 12}" y="${(yA + yB) / 2}">${down ? "strum down" : "strum up"}</text>`}</g>`;
     }
   }
   // palm mute: the picking hand resting on the strings at the bridge end
@@ -1226,13 +1236,16 @@ function fxDraw() {
       h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
     }
     const since = (now - n.pickedAt) / 1000, col = strColor(n.s);
-    if (since < 0.5 && !n.fl.includes("x") && q.fret > 0) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
-      const amp = (n.again ? 8 : 6) * Math.pow(1 - since / 0.5, 1.5), y0 = geo.sy(n.s);
+    // just picked: the string shimmers (a fading wave) and a ring pulses out; it all fits before the next hit, and a
+    // repeated strum of the same chord only gives a small, quiet pulse
+    const life = Math.min(0.5, Math.max(0.16, n.gap * 0.9));
+    if (since >= 0 && since < life && !n.fl.includes("x") && q.fret > 0) {
+      const k = since / life, amp = (n.rep ? 2.5 : n.again ? 8 : 6) * Math.pow(1 - k, 1.5), y0 = geo.sy(n.s);
       let path = `M${geo.left} ${y0}`;
       for (let x = geo.left; x <= geo.x2; x += 6) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 9 + since * 110) * amp * Math.sin(Math.PI * (x - geo.left) / (geo.x2 - geo.left))).toFixed(1)}`;
-      h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${(1 - since / 0.5).toFixed(2)}"/>`;
-      const rg = (geo.r + 5) * (1 + since * (n.again || n.fl.includes("a") ? 2.6 : 1.6));
-      h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.5)).toFixed(2)}"/>`;
+      h += `<path class="fx-shimmer" style="--sc:${col}" d="${path}" opacity="${((n.rep ? 0.5 : 1) * (1 - k)).toFixed(2)}"/>`;
+      const rg = (geo.r + 5) * (1 + k * (n.rep ? 0.35 : n.again || n.fl.includes("a") ? 1.3 : 0.8));
+      h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.rep ? 0.35 : n.again ? 0.95 : 0.6) * (1 - k)).toFixed(2)}"/>`;
     }
     if (q.fret === 0 && !/[siIoOh]/.test(n.fl)) {  // open string: no bubble, the string's name lights up instead
       const lit = 1 - Math.min(1, Math.max(0, (t - n.t0) / Math.max(0.3, n.dur)));
