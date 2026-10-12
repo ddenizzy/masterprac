@@ -251,7 +251,7 @@ def now_tab(song_id):
     """Chords per bar, bar times, key (and the lead notes) of a Songsterr song, for the Now playing page."""
     import tabs
     try:
-        return jsonify(tabs.load(song_id))
+        return jsonify(tabs.load(song_id, request.args.get("lead", type=int)))  # lead = the guitar part to follow
     except Exception as e:
         return jsonify({"error": f"Couldn't load this song's tab: {e}"}), 502
 

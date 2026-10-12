@@ -294,6 +294,19 @@ function tabEmpty(msg) {
   $("#tab-empty").innerHTML = msg; $("#tab-empty").classList.remove("hidden"); $("#tab-svg").classList.add("hidden");
 }
 
+// what the tab shows (its SHOW switches, remembered)
+const TSHOW = { lyrics: true, chords: true, held: true, muted: true, tech: true };
+try { Object.assign(TSHOW, JSON.parse(localStorage.getItem("pl-tshow") || "{}")); } catch (e) { /* defaults */ }
+function tabChips() { document.querySelectorAll("[data-tshow]").forEach((b) => b.classList.toggle("on", !!TSHOW[b.dataset.tshow])); }
+tabChips();
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tshow]");
+  if (!b) return;
+  TSHOW[b.dataset.tshow] = !TSHOW[b.dataset.tshow];
+  try { localStorage.setItem("pl-tshow", JSON.stringify(TSHOW)); } catch (x) { /* fine */ }
+  tabChips(); P.beatIdx = -1; P.lyIdx = -1; drawTab();
+});
+
 // the whole tab as one long strip; it slides left under a fixed playhead as the song plays
 function drawTab() {
   const d = P.tab, svg = $("#tab-svg"), g = $("#tab-g");
@@ -311,23 +324,25 @@ function drawTab() {
     const x = b.t * PX;
     h += `<line class="tbar" x1="${x}" y1="${y0}" x2="${x}" y2="${yEnd}"/><text class="tnum" x="${x + 3}" y="${y0 - 6}">${i + 1}</text>`;
     if (b.section) h += `<text class="tsec" x="${x + 3}" y="14">${esc(b.section)}</text>`;
-    if (b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="31">${esc(spell(b.chord))}</text>`;
+    if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="31">${esc(spell(b.chord))}</text>`;
     lastChord = b.chord;
   });
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
     const x = t * PX + 6;
     let s = `<g class="tb" id="tb${i}">`;
     for (const [st, f, fl] of notes) {
+      if (!TSHOW.held && fl.includes("t")) continue;  // still ringing: not picked again
+      if (!TSHOW.muted && fl.includes("x")) continue;
       let label = fl.includes("x") ? "x" : fl.includes("H") ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
-      if (fl.includes("b")) label += "b"; if (fl.includes("h")) label += "h"; if (fl.includes("s")) label += "/"; if (fl.includes("v")) label += "~";
+      if (TSHOW.tech) { if (fl.includes("b")) label += "b"; if (fl.includes("h")) label += "h"; if (fl.includes("s")) label += "/"; if (fl.includes("v")) label += "~"; }
       const w = label.length * 7 + 4;
       s += `<rect class="tbg" x="${x - 2}" y="${ys(st) - 7}" width="${w}" height="14"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${ys(st) + 4}">${esc(label)}</text>`;
     }
-    if (bf) s += `<text class="tflag" x="${x}" y="${yEnd + 16}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
+    if (bf && TSHOW.tech) s += `<text class="tflag" x="${x}" y="${yEnd + 16}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
     h += s + "</g>";
   });
   // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
-  (d.lyrics || []).forEach(([t, syl, nl], i) => {
+  (TSHOW.lyrics ? d.lyrics || [] : []).forEach(([t, syl, nl], i) => {
     h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${t * PX + 6}" y="${yEnd + 40}">${esc(syl)}</text>`;
   });
   g.innerHTML = h;
