@@ -365,17 +365,20 @@ function applyTab(d, keepSync) {
   if (!keepSync) { P.lrc = []; P.lyBarIdx = undefined; }
   drawTab(); buildMap(); headsUp(); drawPlayBoard();
   if (!keepSync && !(d.lyrics && d.lyrics.length)) {  // no words in the tab: timed lines for the recording itself (LRCLIB)
-    fetch("/api/lyrics").then((r) => r.json()).then((l) => { if (P.songId === id && l.lines && l.lines.length) { P.lrc = l.lines; drawTab(); } }).catch(() => {});
+    fetch("/api/lyrics").then((r) => r.json()).then((l) => { if (P.songId === id && l.lines && l.lines.length) { P.lrc = l.lines; P.lrcSyl = l.syl || []; drawTab(); } }).catch(() => {});
   }
 }
 // one button per guitar part: who plays it, electric or acoustic, how much of the song it plays (a little bar)
 function partButtons() {
   const d = P.tab;
   $("#part-btns").classList.toggle("many", d.tracks.length > 4);
-  $("#part-btns").innerHTML = d.tracks.map((t) => {
+  const names = d.tracks.map(partName), seen = {};
+  $("#part-btns").innerHTML = d.tracks.map((t, k) => {
     const share = Math.round(100 * (t.played || 0) / Math.max(1, d.bars.length));
+    // two parts with the same name ("Acoustic Guitar (steel)" twice): number them
+    const twins = names.filter((x) => x === names[k]).length, label = twins > 1 ? `${names[k]} ${(seen[names[k]] = (seen[names[k]] || 0) + 1)}` : names[k];
     return `<button class="part-b ${t.i === d.lead ? "on" : ""} ${P.autoFrom != null && t.i === d.lead ? "auto" : ""}" data-part="${t.i}" title="${esc(t.name)} · plays ${share}% of the song">
-      <span class="pk">${isAcoustic(t) ? "AC" : "EL"}</span>${esc(partName(t))}<i class="share"><b style="width:${share}%"></b></i></button>`;
+      <span class="pk">${isAcoustic(t) ? "AC" : "EL"}</span>${esc(label)}<i class="share"><b style="width:${share}%"></b></i></button>`;
   }).join("");
 }
 // "Thom Yorke | Takamine EN10C | Rhythm Guitar" -> "Thom Yorke · Rhythm Guitar"
@@ -433,7 +436,7 @@ function tabEmpty(msg) {
 }
 
 // what the tab shows (its SHOW switches, remembered)
-const TSHOW = { lyrics: true, chords: true, held: true, muted: true, tech: true };
+const TSHOW = { lyrics: true, chords: true, held: true, muted: true, tech: true, reps: false };
 try { Object.assign(TSHOW, JSON.parse(localStorage.getItem("pl-tshow") || "{}")); } catch (e) { /* defaults */ }
 function tabChips() { document.querySelectorAll("[data-tshow]").forEach((b) => b.classList.toggle("on", !!TSHOW[b.dataset.tshow])); }
 tabChips();
@@ -472,10 +475,22 @@ function drawTab() {
   const lastOn = {};   // string -> {x, w, fl} of the previous note (to join arcs / slides)
   let tech = "";
   const flagWords = { pm: "P.M.", lr: "let ring", tr: "tremolo", wh: "whammy", gr: "grace" };
+  // the same chord strummed again in the same bar: a light rhythm line instead of all the numbers again, so the eye
+  // goes to where the chord CHANGES (numbers come back on a new chord / a new bar; Show > Repeated strums: numbers)
+  let prevKey = "", prevBar = -1;
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
     const x = t * PX + 6;
     let s = `<g class="tb" id="tb${i}">`;
-    for (const [st, f, fl] of notes) {
+    const key = notes.filter((n) => !n[2].includes("t")).map((n) => `${n[0]}:${n[1]}:${n[2]}`).sort().join(" ");
+    const plain = notes.every((n) => !/[hsiIoObBqvVHPg]/.test(n[2]));
+    const repeat = !TSHOW.reps && notes.length >= 3 && plain && key === prevKey && bar === prevBar;
+    prevKey = key; prevBar = bar;
+    if (repeat) {
+      const ss = notes.map((n) => n[0]), yA = ys(Math.min(...ss)), yB = ys(Math.max(...ss));
+      s += `<rect class="tbg rep" x="${x - 1}" y="${yA - 4}" width="${10 * Z}" height="${yB - yA + 8}" rx="3"/><line class="trep" x1="${x + 4 * Z}" y1="${yA - 2}" x2="${x + 4 * Z}" y2="${yB + 2}"/>`;
+      for (const [st] of notes) lastOn[st] = { x, w: 8 * Z, fl: "", f: 0 };
+    }
+    for (const [st, f, fl] of repeat ? [] : notes) {
       if (!TSHOW.held && fl.includes("t")) continue;  // still ringing: not picked again
       if (!TSHOW.muted && fl.includes("x")) continue;
       const label = fl.includes("x") ? "x" : /[HP]/.test(fl) ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
@@ -542,23 +557,37 @@ function drawTab() {
   // timed lines from LRCLIB (no words in the tab): they only know when each LINE starts. So each line is spread over
   // the time it's sung (up to the next line), every word given time by its syllables: the words pass the playhead
   // about when they're sung instead of the whole line flying by. Times = recording time + the sync shift.
-  P.lrcDrawnAt = P.offset; P.lrcWords = [];
+  P.lrcDrawnAt = lrcSig(); P.lrcWords = [];
+  const toTab = (r) => r + offsetAt(r);  // recording time -> tab time: the same sync the tab follows (it can change along the song)
   const lrc = TSHOW.lyrics && !P.lyDrawn.length ? P.lrc || [] : [];
-  const sylls = (w) => Math.max(1, (w.match(/[aeiouyâêîôûäöüıàéèíóúAEIOUYÂÊÎÔÛÄÖÜİÀÉÈÍÓÚ]+/g) || []).length);
+  // each word split into syllables by the server (Turkish rules / English dictionary: "Yak-laş-tır-sa-na"),
+  // the syllables sung at an even pace; the line's LAST syllable is held until the next line comes (dashes), the way
+  // singers stretch the end of a line ("elseeeewheeere")
   lrc.forEach(([t, line], i) => {
     const words = line.split(/\s+/).filter(Boolean);
     if (!words.length) return;
-    const t0 = t + P.offset, next = lrc[i + 1] ? lrc[i + 1][0] + P.offset : t0 + 8;
-    const total = words.reduce((a, w) => a + sylls(w), 0);
-    const dur = Math.max(0.6, Math.min(next - t0 - 0.35, total * 0.42 + 0.6));  // a line rarely takes longer than ~0.4 s a syllable
-    let acc = 0;
-    words.forEach((w, k) => {
-      const wt = t0 + (dur * acc) / total, wx = wt * PX + 6;
-      acc += sylls(w);
-      const nt = k + 1 < words.length ? t0 + (dur * acc) / total : Infinity, room = nt * PX + 6 - wx - cw * 0.5;
-      const id = `lr${i}w${k}`;
-      h += `<text class="tlyric ${k ? "" : "first"}" id="${id}" x="${wx.toFixed(1)}" y="${ly0}"${fit(wx, w, room)}>${esc(w)}</text>`;
-      P.lrcWords.push([wt, id]);
+    const syl = (P.lrcSyl && P.lrcSyl[i] && P.lrcSyl[i].length) ? P.lrcSyl[i] : words.map((w) => [w]), n = syl.reduce((a, w) => a + w.length, 0);
+    const t0 = toTab(t), next = lrc[i + 1] ? toTab(lrc[i + 1][0]) : t0 + 8, avail = Math.max(0.6, next - t0 - 0.3);
+    const pace = Math.min(0.34, (avail * 0.8) / n);  // seconds per syllable
+    const holdEnd = Math.min(t0 + avail, t0 + n * pace + 2.5);
+    let k = 0;
+    syl.forEach((parts, wi) => {
+      parts.forEach((sy, si) => {
+        const st = t0 + k * pace, sx = st * PX + 6, lastOfLine = wi === syl.length - 1 && si === parts.length - 1;
+        const nt = lastOfLine ? holdEnd : t0 + (k + 1) * pace, room = nt * PX + 6 - sx - (si < parts.length - 1 ? cw * 1.2 : cw * 0.5);
+        const id = `lr${i}s${k}`;
+        h += `<text class="tlyric ${k ? "" : "first"}" id="${id}" x="${sx.toFixed(1)}" y="${ly0}"${fit(sx, sy, room)}>${esc(sy)}</text>`;
+        const end = sx + Math.min(sy.length * cw, Math.max(room, sy.length * cw * 0.5));
+        if (si < parts.length - 1) {  // inside a word: a dash to the next syllable
+          const gx = (t0 + (k + 1) * pace) * PX + 6 - end;
+          if (gx > cw * 1.1) h += `<text class="tlyric dash" x="${(end + gx / 2 - cw / 2).toFixed(1)}" y="${ly0}">-</text>`;
+        } else if (lastOfLine) {      // held at the end of the line: dashes up to where it stops
+          const gx = holdEnd * PX + 6 - end;
+          if (gx > cw * 4) { const m = Math.min(10, Math.floor(gx / (cw * 2.4))); for (let q = 1; q <= m; q++) h += `<text class="tlyric dash" x="${(end + (gx * q) / (m + 1) - cw / 2).toFixed(1)}" y="${ly0}">-</text>`; }
+        }
+        P.lrcWords.push([st, id]);
+        k++;
+      });
     });
   });
   g.innerHTML = h;
@@ -567,6 +596,8 @@ function drawTab() {
     d.tuning.map((open, s) => `<text class="tname" x="12" y="${ys(s) + 4}">${nn(open % 12)}</text>`).join("");
   layoutTab();
 }
+// what the LRCLIB lines were placed with: when it changes, they're drawn again
+const lrcSig = () => `${P.offset.toFixed(3)}|${(SYNC.points || []).length}|${offsetAt(60).toFixed(3)}`;
 function layoutTab() {
   const svg = $("#tab-svg"), W = svg.clientWidth || 1000, H = svg.clientHeight || 170;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -611,7 +642,7 @@ function playTick() {
     P.beatIdx = bt;
   }
   if (P.lrc && P.lrc.length && !(P.lyDrawn && P.lyDrawn.length)) {
-    if (Math.abs((P.lrcDrawnAt ?? 0) - P.offset) > 0.001) drawTab();  // sync shift changed: move the lines with it
+    if (P.lrcDrawnAt !== lrcSig()) drawTab();  // the sync changed: move the lines with it
     const wi = lastAt(P.lrcWords || [], t, (x) => x[0]), id = wi >= 0 ? P.lrcWords[wi][1] : "";
     if (id !== P.lrIdx) { if (P.lrIdx) document.getElementById(P.lrIdx)?.classList.remove("on"); if (id) document.getElementById(id)?.classList.add("on"); P.lrIdx = id; }
   }
@@ -674,7 +705,8 @@ function headsUp(extra) {
     const note = d.beats.find((b) => b[5] && b[2] >= bi - 1 && b[2] <= bi + 2);
     if (note) out.push(`Tab note: "${esc(note[5].slice(0, 140))}${note[5].length > 140 ? "..." : ""}"`);
   } else if (P.info && P.info.title) out.push(P.src === "ear" || !P.info.match ? "Chords by ear: a change shows after about a bar." : "Pulling the tab from Songsterr...");
-  $("#pl-heads-list").innerHTML = out.slice(0, 4).map((x) => `<li>${x}</li>`).join("") || `<li class="sub">Nothing special right now: just play.</li>`;
+  $("#pl-heads-list").innerHTML = out.slice(0, 4).map((x) => `<li>${x}</li>`).join("");
+  $("#pl-heads").classList.toggle("quiet", !out.length);  // nothing to say: the box steps aside
 }
 
 // under the fretboard: what to do, in one line
@@ -1489,6 +1521,10 @@ $("#o-showkey").checked = showKey0; $("#o-autohide").checked = autoHide0;
 document.body.classList.toggle("no-key", !showKey0);
 $("#o-showkey").addEventListener("change", (e) => { saveSetting("showkey", e.target.checked); document.body.classList.toggle("no-key", !e.target.checked); });
 $("#o-autohide").addEventListener("change", (e) => { saveSetting("autohide", e.target.checked); idle(); });
+// the CHORD NOW / NEXT / WHERE boxes: off by default (the tab and fretboard already show it)
+const showBoxes0 = setting("showboxes", false);
+$("#o-showboxes").checked = showBoxes0; document.body.classList.toggle("no-boxes", !showBoxes0);
+$("#o-showboxes").addEventListener("change", (e) => { saveSetting("showboxes", e.target.checked); document.body.classList.toggle("no-boxes", !e.target.checked); });
 // top bars: hidden after 3 s without the mouse near them; back when the mouse goes to the top
 let idleT = null;
 function idle() {
@@ -1652,7 +1688,7 @@ async function startPractice(id, title, artist) {
   if (!d || d.error || !(d.videos || []).length) { toast("This tab has no recording to practise with"); stopPractice(); return; }
   $("#pk-backing").classList.toggle("hidden", !d.videos.some((v) => v.kind === "backing"));
   fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`).then((r) => r.json())
-    .then((l) => { if (PR.on && P.songId === id && !(d.lyrics && d.lyrics.length) && l.lines) { P.lrc = l.lines; drawTab(); } }).catch(() => {});
+    .then((l) => { if (PR.on && P.songId === id && !(d.lyrics && d.lyrics.length) && l.lines) { P.lrc = l.lines; P.lrcSyl = l.syl || []; drawTab(); } }).catch(() => {});
   playVideo(PR.kind);
 }
 async function playVideo(kind, skip = 0) {

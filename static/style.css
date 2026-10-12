@@ -612,3 +612,10 @@ body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph, bod
    browser measured its place half a window to the right) */
 .view.win { left: 0; right: 0; margin: 0 auto; transform: none; }
 
+
+body.no-boxes .np-box.np-info { display: none; }
+.trep { stroke: #8c8174; stroke-width: 2.5; stroke-linecap: round; }
+.tb.on .trep { stroke: #e8461a; stroke-width: 3.5; }
+.tbg.rep { fill: transparent; }
+body.neon .trep { stroke: #6d6aa8; } body.neon .tb.on .trep { stroke: #c9b0ff; }
+.pl-heads.quiet { display: none; }

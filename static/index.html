@@ -77,9 +77,9 @@
       <div class="yt-box" id="yt-box"><div id="yt"></div></div>
     </div>
     <div class="pl-now">
-      <div class="np-box big"><span class="kicker">CHORD NOW</span><b id="pl-chord">-</b></div>
-      <div class="np-box"><span class="kicker">NEXT</span><b id="pl-next">-</b><span class="sub" id="pl-in"></span></div>
-      <div class="np-box"><span class="kicker">WHERE</span><b id="pl-section">-</b><span class="sub" id="pl-barno"></span></div>
+      <div class="np-box np-info big"><span class="kicker">CHORD NOW</span><b id="pl-chord">-</b></div>
+      <div class="np-box np-info"><span class="kicker">NEXT</span><b id="pl-next">-</b><span class="sub" id="pl-in"></span></div>
+      <div class="np-box np-info"><span class="kicker">WHERE</span><b id="pl-section">-</b><span class="sub" id="pl-barno"></span></div>
       <div class="np-box"><span class="kicker">KEY</span><b id="pl-key">-</b><span class="sub" id="pl-keysub"></span></div>
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
@@ -88,6 +88,7 @@
       <span class="tab-rest hidden" id="tab-rest"></span>
       <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE TAB</span><button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
         <button class="chip-t" data-tshow="chords" title="Chord names above the tab">Chords</button>
+        <button class="chip-t" data-tshow="reps" title="Write out every strum of the same chord again (off: a light line, numbers only when the chord changes)">Repeated strums: numbers</button>
         <button class="chip-t" data-tshow="held" title="Notes still ringing from before, shown as (3): you don't pick them again">Held notes</button>
         <button class="chip-t" data-tshow="muted" title="Muted, scratchy notes (x)">Muted notes</button>
         <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button></div></details>
@@ -161,6 +162,7 @@
     </section>
 
     <section class="o-sec"><h4>Play page</h4>
+      <label class="o-switch"><input type="checkbox" id="o-showboxes"><i></i><span>Show the chord now / next / where boxes</span></label>
       <label class="o-switch"><input type="checkbox" id="o-showkey"><i></i><span>Show the key box</span></label>
       <label class="o-switch"><input type="checkbox" id="o-autohide" checked><i></i><span>Hide the top bars when I'm not using them <em>(move the mouse to the top to see them)</em></span></label>
     </section>

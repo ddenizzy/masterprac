@@ -268,11 +268,11 @@ def search():
 def lyrics_now():
     """Timed lyric lines for the playing recording (LRCLIB), for songs whose tab has no lyrics."""
     if request.args.get("title"):
-        return jsonify({"lines": h.lrclib_lyrics(request.args["title"], request.args.get("artist", ""), 0)})
+        return jsonify(h.with_syllables(h.lrclib_lyrics(request.args["title"], request.args.get("artist", ""), 0)))
     p = h.now_playing()
     if not p.get("title"):
-        return jsonify({"lines": []})
-    return jsonify({"lines": h.lrclib_lyrics(p["title"], p["artist"], p.get("duration") or 0), "title": p["title"]})
+        return jsonify({"lines": [], "syl": []})
+    return jsonify(dict(h.with_syllables(h.lrclib_lyrics(p["title"], p["artist"], p.get("duration") or 0)), title=p["title"]))
 
 
 @app.post("/api/player/<what>")

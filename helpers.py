@@ -307,6 +307,55 @@ def songsterr_matches(title, artist):
 
 
 # ---------- timed lyrics from LRCLIB (free, open: lrclib.net) when the tab has none ----------
+TR_VOWELS = set("aeıioöuüâîûAEIİOÖUÜÂÎÛ")
+TR_LETTERS = "çğışöüÇĞİŞÖÜ"
+
+
+def _tr_syllables(word):
+    """Turkish: one vowel per syllable; between two vowels the LAST consonant starts the next syllable
+    (ya-vaş, kır-gın, Türk-çe), two vowels side by side split (sa-at)."""
+    vi = [i for i, c in enumerate(word) if c in TR_VOWELS]
+    cuts = [vi[k + 1] if vi[k + 1] - vi[k] == 1 else vi[k + 1] - 1 for k in range(len(vi) - 1)]
+    parts, at = [], 0
+    for c in cuts:
+        parts.append(word[at:c]); at = c
+    parts.append(word[at:])
+    return [p for p in parts if p]
+
+
+_EN = None
+
+
+def syllables(line, turkish):
+    """'Yaklaştırsana yavaş' -> [['Yak','laş','tır','sa','na'], ['ya','vaş']] (punctuation stays on its syllable)."""
+    global _EN
+    out = []
+    for w in line.split():
+        core = re.sub(r"^\W+|\W+$", "", w)
+        if len(core) < 3:
+            out.append([w]); continue
+        if turkish:
+            parts = _tr_syllables(core)
+        else:
+            try:
+                import pyphen
+                _EN = _EN or pyphen.Pyphen(lang="en_US", left=2, right=2)
+                parts = _EN.inserted(core).split("-")
+            except Exception:
+                parts = [core]
+        lead, tail = w[:w.index(core)] if core in w else "", w[w.index(core) + len(core):] if core in w else ""
+        parts[0], parts[-1] = lead + parts[0], parts[-1] + tail
+        out.append(parts)
+    return out
+
+
+def with_syllables(lines):
+    """LRCLIB lines + each line split in syllables (Turkish rules when the song is in Turkish, else English)."""
+    text = " ".join(l for _, l in lines)
+    turkish = any(c in TR_LETTERS for c in text)
+    return {"lines": lines, "syl": [syllables(l, turkish) for _, l in lines]}
+
+
 def lrclib_lyrics(title, artist, duration=0):
     """Lines with their time in the RECORDING: [[seconds, "line"], ...] or []. Cached in data/lyrics.json."""
     key = f"{title}|{artist}|{round(duration or 0)}".lower()
