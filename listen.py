@@ -37,7 +37,15 @@ def _feed(new):
         _state["ring"], _state["at"] = ring, time.time()
 
 
+_start_lock = threading.Lock()
+
+
 def start():
+    with _start_lock:  # the page asks from several places at once: start only one listener
+        _start()
+
+
+def _start():
     if _state["proc"] is not None:
         return
     if not os.path.exists(TAP):
@@ -68,7 +76,8 @@ def start():
 
 
 def stop():
-    proc, _state["proc"] = _state["proc"], None
+    with _start_lock:
+        proc, _state["proc"] = _state["proc"], None
     if proc is not None:
         proc.terminate()  # the helper removes its tap on SIGTERM
         print("  ears: stopped", flush=True)
