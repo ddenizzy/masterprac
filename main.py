@@ -201,6 +201,18 @@ class Api:
 
     def __init__(self):
         self._browser = None
+        self._window = None
+
+    def fullscreen(self, on):
+        """The Mac's real full screen for the Play page's full-screen mode (on=True/False)."""
+        w = self._window.native if self._window else None
+        if w is None:
+            return
+        def go():
+            is_full = bool(w.styleMask() & (1 << 14))  # NSWindowStyleMaskFullScreen
+            if bool(on) != is_full:
+                w.toggleFullScreen_(None)
+        AppHelper.callAfter(go)
 
     def browser_place(self, x, y, w, hgt):
         AppHelper.callAfter(self._browser.place, float(x), float(y), float(w), float(hgt))
@@ -321,6 +333,7 @@ def main():
     window = webview.create_window("MasterPrac", f"http://127.0.0.1:{PORT}/", js_api=api,
                                    width=min(1400, W), height=min(900, H), min_size=(900, 600))
     api._browser = Browser(window)
+    api._window = window
     window.events.closing += end_session
 
     def show_window():

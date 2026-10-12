@@ -52,6 +52,7 @@
       <div class="pl-actions">
         <button class="ghost" id="pl-chords" title="Every chord of the song, part by part">Song chords</button>
         <button class="ghost" id="pl-options" title="What the fretboard shows, which guitar part, timing">Options</button>
+        <button class="ghost" id="pl-full" title="Only the chord, the tab and the fretboard, over the whole screen (Esc to leave)">Full screen</button>
         <button id="pl-open" disabled>Open in Songsterr &#8599;</button>
       </div>
     </div>
@@ -64,7 +65,10 @@
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
 
-    <div class="tabstrip" id="tabstrip">
+    <div class="pl-ph" data-panel="tab"><span class="kicker">TAB</span><span class="sub ph-hint">scrolls with the music</span>
+      <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
+      <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
+    <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
       <div class="tab-sync hidden" id="tab-sync"></div>
@@ -72,7 +76,15 @@
       <div class="tab-rest hidden" id="tab-rest"></div>
     </div>
 
-    <div class="board-wrap"><svg id="pl-board" class="board"></svg></div>
+    <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
+      <span class="show-row"><span class="kicker">SHOW</span>
+        <button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
+        <button class="chip-t" data-show="next" title="The notes coming up next (dashed)"><i class="dot next"></i>Next</button>
+        <button class="chip-t" data-show="chord" title="Notes of the chord playing now (green): land on these"><i class="dot chord"></i>Chord notes</button>
+        <button class="chip-t" data-show="scale" title="The key's safe notes (grey) and its home note (orange)"><i class="dot scale"></i>Safe notes</button>
+      </span>
+      <button class="ghost icon ph-toggle" data-collapse="board" title="Close / open the fretboard">&#9662;</button></div>
+    <div class="board-wrap pl-body" data-body="board"><svg id="pl-board" class="board"></svg></div>
     <div class="pl-foot" id="pl-foot"></div>
   </section>
 
@@ -90,6 +102,12 @@
     <div class="o-row"><span>Timing: chords or notes early/late?</span>
       <button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></div>
     <div class="o-row"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
+  </div></div>
+  <div class="pop hidden" id="pop-versions"><div class="pop-card wide">
+    <div class="pop-head"><b>Which tab of this song?</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <p class="explain" id="ver-intro">Songsterr often has several tabs of the same song. Pick the one whose guitars and length match your recording.</p>
+    <div class="ver-list" id="ver-list"></div>
+    <form class="ver-paste" id="ver-paste"><input id="ver-url" placeholder="Or paste any Songsterr tab link..." autocomplete="off"><button type="submit">Use this link</button></form>
   </div></div>
   <div class="pop hidden" id="pop-chords"><div class="pop-card wide">
     <div class="pop-head"><b>The whole song's chords</b><button class="ghost icon" data-close>&#10005;</button></div>

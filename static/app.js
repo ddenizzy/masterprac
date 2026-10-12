@@ -235,7 +235,7 @@ async function pollNow() {
   P.key = null; P.chord = ""; P.sig = "";
   const id = p.match && p.match.id;
   if (id !== P.songId) {
-    P.songId = id; P.tab = null; drawTab();
+    P.songId = id; P.tab = null; drawTab(); $("#tab-sync").classList.add("hidden");
     P.offset = Number(localStorage.getItem("pl-offset-" + id) || 0); showOffset();
     if (id) {
       const saved = localStorage.getItem("pl-track-" + id);
@@ -383,7 +383,7 @@ function playTick() {
     const li = lastAt(d.lyrics, t, (x) => x[0]);
     if (li !== P.lyIdx) { document.getElementById("ly" + P.lyIdx)?.classList.remove("on"); document.getElementById("ly" + li)?.classList.add("on"); P.lyIdx = li; }
   }
-  const sig = `${bi}|${P.mode === "learn" ? ei + "|" + (cur ? 1 : 0) : ""}`;
+  const sig = `${bi}|${notesShown() ? ei + "|" + (cur ? 1 : 0) : ""}`;
   if (sig === P.sig) return;
   P.sig = sig;
   P.nowNotes = cur ? cur[2] : [];
@@ -456,17 +456,45 @@ function foot(next) {
     <div class="sub">Start at <b>${lowE === 0 ? "the open thickest string (or fret 12)" : `fret ${lowE} of the thickest string`}</b>: that's ${nn(k.root)}, home.</div>`;
 }
 
+// what the fretboard shows (the SHOW switches); Jam and Learn each remember their own
+const SHOW = { jam: { now: false, next: false, chord: true, scale: true }, learn: { now: true, next: true, chord: false, scale: true } };
+try { Object.assign(SHOW, JSON.parse(localStorage.getItem("pl-show") || "{}")); } catch (e) { /* defaults */ }
+const show = () => SHOW[P.mode];
+const notesShown = () => show().now || show().next;
+function showChips() {
+  document.querySelectorAll("[data-show]").forEach((b) => b.classList.toggle("on", !!show()[b.dataset.show]));
+}
 function drawPlayBoard() {
   if (tab !== "play") return;
-  const k = P.key, c = chordInfo(P.chord), which = $("#o-scale").value, learn = P.mode === "learn";
+  const k = P.key, c = chordInfo(P.chord), which = $("#o-scale").value, sh = show();
   let key = k, scale = k ? SCALES[which](k.minor) : [];
   if (which === "chord" && c) { key = { root: c.root, minor: c.minor }; scale = [0]; }
-  fretboard($("#pl-board"), { tuning: usingTab() ? P.tab.tuning : STD, key, scale, chordTones: !learn && c ? c.tones : [],
-    labels: $("#o-labels").value, area: $("#o-area").value, dim: learn,
-    frets: learn && usingTab() ? Math.min(22, Math.max(15, ...P.tab.events.flatMap((e) => e[2].map((x) => x[1] + 1)))) : 15,
-    now: learn ? P.nowNotes : [], next: learn ? P.nextNotes : [] });
-  if (learn) foot();
+  fretboard($("#pl-board"), { tuning: usingTab() ? P.tab.tuning : STD, key, scale: sh.scale ? scale : [],
+    chordTones: sh.chord && c ? c.tones : [], labels: $("#o-labels").value, area: $("#o-area").value,
+    dim: notesShown() && (sh.scale || sh.chord),  // the guitarist's notes stand out over faded safe notes
+    frets: notesShown() && usingTab() ? Math.min(22, Math.max(15, ...P.tab.events.flatMap((e) => e[2].map((x) => x[1] + 1)))) : 15,
+    now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [] });
+  if (P.mode === "learn") foot();
 }
+showChips();
+
+// close / open the tab and the fretboard (remembered)
+let collapsed = [];
+try { collapsed = JSON.parse(localStorage.getItem("pl-collapsed") || "[]"); } catch (e) { /* none */ }
+function applyCollapsed() {
+  document.querySelectorAll("[data-body]").forEach((el) => el.classList.toggle("hidden", collapsed.includes(el.dataset.body)));
+  document.querySelectorAll("[data-panel]").forEach((el) => el.classList.toggle("collapsed", collapsed.includes(el.dataset.panel)));
+  drawTab(); drawPlayBoard();
+}
+
+// full screen: just the chord, the tab and the fretboard (Esc or the button to leave)
+function setFull(on) {
+  document.body.classList.toggle("pl-focus", on);
+  $("#pl-full").textContent = on ? "Leave full screen" : "Full screen";
+  if (api() && api().fullscreen) api().fullscreen(on);
+  setTimeout(() => { layoutTab(); drawPlayBoard(); }, 400);
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("pl-focus")) setFull(false); });
 
 // the song's chord map (pop-up): one row per part, chords in order, repeats merged
 function buildMap() {
@@ -614,9 +642,21 @@ document.addEventListener("click", (e) => {
     P.mode = b.dataset.mode; P.sig = "";
     document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
     document.body.classList.toggle("mode-learn", P.mode === "learn");
-    foot(); headsUp(); drawPlayBoard();
+    showChips(); P.sig = ""; foot(); headsUp(); drawPlayBoard();
   }
   if (b.id === "pl-options") openPop("#pop-options");
+  if (b.id === "pl-full") setFull(!document.body.classList.contains("pl-focus"));
+  if (b.dataset.show) {
+    show()[b.dataset.show] = !show()[b.dataset.show];
+    try { localStorage.setItem("pl-show", JSON.stringify(SHOW)); } catch (x) { /* fine */ }
+    showChips(); P.sig = ""; drawPlayBoard();
+  }
+  if (b.dataset.collapse) {
+    const id = b.dataset.collapse;
+    collapsed = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
+    try { localStorage.setItem("pl-collapsed", JSON.stringify(collapsed)); } catch (x) { /* fine */ }
+    applyCollapsed();
+  }
   if (b.id === "pl-chords") { buildMap(); P.barIdx = -1; openPop("#pop-chords"); }
   if (b.dataset.nudge && P.songId) {
     if (SYNC.on) { SYNC.on = false; $("#o-autosync").checked = false; syncStatus(""); toast("Auto-sync off: you're setting the timing"); }
@@ -782,3 +822,38 @@ function drawChat(waiting) {
 }
 $("#ask-form").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#ask-q").value.trim(); if (q) { $("#ask-q").value = ""; ask(q); } });
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-ask]"); if (b) ask(b.dataset.ask); });
+
+applyCollapsed();
+
+/* ---------- tab version picker ---------- */
+async function openVersions() {
+  openPop("#pop-versions");
+  $("#ver-list").innerHTML = `<p class="explain">Looking at every Songsterr tab of this song (a few seconds the first time)...</p>`;
+  let d;
+  try { d = await (await fetch("/api/now/versions")).json(); } catch (e) { $("#ver-list").innerHTML = `<p class="explain">Couldn't reach Songsterr.</p>`; return; }
+  if (!d.versions.length) { $("#ver-list").innerHTML = `<p class="explain">Songsterr has no tab of this song. Paste a link below if you found one.</p>`; return; }
+  const len = (x) => fmtT(x);
+  $("#ver-intro").innerHTML = `Songsterr has <b>${d.versions.length}</b> tab${d.versions.length > 1 ? "s" : ""} of this song. Pick the one whose guitars and length match your recording${d.duration ? ` (yours is <b>${len(d.duration)}</b> long)` : ""}.`;
+  $("#ver-list").innerHTML = d.versions.map((v) => {
+    const close = d.duration && Math.abs(v.length - d.duration) <= 8;
+    return `<div class="ver ${v.chosen ? "on" : ""}">
+      <div class="ver-main"><b>${esc(v.title)}</b> <span class="sub">by ${esc(v.artist)} on Songsterr</span>
+        <div class="ver-tags"><span class="${close ? "good" : ""}">${len(v.length)} long${close ? " · same as yours" : ""}</span>${v.synced ? `<span class="good">timed to a recording</span>` : `<span>timing from tempo</span>`}${v.lyrics ? "<span>lyrics</span>" : ""}</div>
+        <div class="ver-parts">${v.parts.map((t) => `<span>${esc(partName(t))} <i>${t.played}/${v.bars} bars</i></span>`).join("") || `<span class="sub">no guitar parts</span>`}</div></div>
+      ${v.chosen ? `<span class="ver-cur">IN USE</span>` : `<button data-version="${v.id}">Use this</button>`}</div>`;
+  }).join("");
+}
+async function useVersion(body) {
+  const r = await fetch("/api/now/version", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || "Couldn't use that tab"); return; }
+  toast("Using that tab"); closePops();
+  P.info = null; P.songId = null; pollNow();  // reload the song with the new tab
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "pl-versions") openVersions();
+  if (b.dataset.version) useVersion({ id: Number(b.dataset.version) });
+});
+$("#ver-paste").addEventListener("submit", (e) => { e.preventDefault(); const u = $("#ver-url").value.trim(); if (u) useVersion({ url: u }); });

@@ -124,11 +124,15 @@ def ask():
 # ---------- NOW PLAYING: whatever plays on the Mac, in any app ----------
 _matches = {}  # "title|artist" -> the best Songsterr version (or None), looked up once
 _match_lock = threading.Lock()
+_followed = {"key": None}
 
 
 def best_version(title, artist):
-    """Of all Songsterr versions of the song, the most complete one: most bars with guitar, synced to the recording."""
+    """The tab version you picked for this song, else Songsterr's top one (or a more complete one if that's unfinished)."""
     import tabs
+    pick = h.load("version_choice", {}).get(f"{title}|{artist}".lower())
+    if pick:
+        return pick
     found = h.songsterr_matches(title, artist)[:4]
     if len(found) <= 1:
         return found[0] if found else None
@@ -165,8 +169,81 @@ def now():
         with _match_lock:  # the page asks every second: look it up once
             if k not in _matches:
                 _matches[k] = best_version(p["title"], p["artist"])
+            if _matches[k] and _followed.get("key") != k:  # the playing song changed: follow it
+                _followed["key"] = k
+                follow_song(_matches[k])
         p["match"] = _matches[k]
     return jsonify(p)
+
+
+@app.get("/api/now/versions")
+def now_versions():
+    """Every Songsterr version of the playing song, with what's in it, to choose from."""
+    import tabs
+    from concurrent.futures import ThreadPoolExecutor
+    p = h.now_playing()
+    if not p.get("title"):
+        return jsonify({"versions": []})
+    k = f"{p['title']}|{p['artist']}".lower()
+    found = h.songsterr_matches(p["title"], p["artist"])[:8]
+    cur = (_matches.get(k) or {}).get("id")
+
+    def info(m):
+        try:
+            d = tabs.load(m["id"])
+        except Exception:
+            return None
+        parts = [{"i": t["i"], "name": t["name"], "instrument": t["instrument"], "played": t.get("played") or 0} for t in d["tracks"]]
+        return {**m, "synced": d["synced"], "length": round(d["bars"][-1]["end"]) if d["bars"] else 0, "bars": len(d["bars"]),
+                "parts": parts, "lyrics": bool(d.get("lyrics")), "chosen": m["id"] == cur}
+    with ThreadPoolExecutor(4) as ex:
+        out = [v for v in ex.map(info, found) if v]
+    return jsonify({"versions": out, "duration": round(p.get("duration") or 0)})
+
+
+@app.post("/api/now/version")
+def now_version():
+    """Use this tab version for the playing song from now on: {id} from the list, or {url} of any Songsterr tab."""
+    p = h.now_playing()
+    if not p.get("title"):
+        return jsonify({"error": "Nothing is playing."}), 400
+    b = request.get_json(force=True) or {}
+    sid = b.get("id")
+    if b.get("url"):
+        m = h.re.search(r"-tab-s(\d+)", b["url"])
+        if not m:
+            return jsonify({"error": "That isn't a Songsterr tab link (it should end like ...-tab-s12345)."}), 400
+        sid = int(m.group(1))
+    found = h.songsterr_song_from_url(f"{h.SONGSTERR}/a/wsa/x-tab-s{int(sid)}")
+    if not found:
+        return jsonify({"error": "Couldn't open that tab on Songsterr."}), 400
+    m = {"id": found["id"], "title": found["title"], "artist": found["artist"],
+         "url": h.songsterr_url({"songId": found["id"], "title": found["title"], "artist": found["artist"]})}
+    k = f"{p['title']}|{p['artist']}".lower()
+    picks = h.load("version_choice", {})
+    picks[k] = m
+    h.save("version_choice", picks)
+    with _match_lock:
+        _matches[k] = m
+        _followed["key"] = k
+    follow_song(m)
+    log(f"Using the tab you picked for \"{p['title']}\" ({m['artist']} on Songsterr).")
+    return jsonify({"ok": True, "match": m})
+
+
+def follow_song(m):
+    """A new song started in Spotify/YouTube/...: it becomes THE song (Amp & tone, My songs) - the latest one wins,
+    whether it was started in a player or opened in the Songsterr tab."""
+    import guide
+    cur = SESSION.get("song")
+    if cur and cur.get("id") == m["id"]:
+        return
+    song = {"id": m["id"], "title": m["title"], "artist": m["artist"], "url": m["url"], "tracks": []}
+    SESSION["song"] = song
+    log(f"Now playing: \"{song['title']}\" by {song['artist']}.")
+    song_opened(song)
+    if not guide.get(song, on_ready=lambda sid: log(f"Tone guide ready for \"{song['title']}\" (Amp & tone tab).")):
+        log(f"Writing the tone guide for \"{song['title']}\" (about 20 seconds)...")
 
 
 @app.get("/api/now/tab/<int:song_id>")

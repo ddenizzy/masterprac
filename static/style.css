@@ -217,3 +217,38 @@ button.mini { padding: 3px 9px; font-size: 12px; margin-left: 6px; }
 .tlyric { fill: #6b6156; font: 600 13px var(--font); }
 .tlyric.first { fill: #3d352d; font-weight: 800; }
 .tlyric.on { fill: #e8461a; }
+
+/* panel headers: close/open the tab and the fretboard */
+.pl-ph { display: flex; align-items: center; gap: 10px; margin-bottom: -4px; flex-shrink: 0; }
+.pl-ph .ph-hint { font-size: 12px; }
+.pl-ph .ph-toggle { margin-left: auto; width: 30px; padding: 3px 0; font-size: 13px; transition: transform .15s; }
+.pl-ph.collapsed .ph-toggle { transform: rotate(-90deg); }
+.show-row { display: flex; align-items: center; gap: 6px; margin-left: 14px; flex-wrap: wrap; }
+.chip-t { font: 600 12.5px var(--font); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+.chip-t.on { background: var(--card); color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.chip-t .dot { width: 9px; height: 9px; }
+.dot.chord { background: #7ed98b; } .dot.scale { background: #4a413b; border: 1px solid #a89a8a; } .dot.root { background: var(--accent); }
+
+/* full screen: only the chord, the tab and the fretboard */
+body.pl-focus .top, body.pl-focus .pl-heads, body.pl-focus .pl-foot, body.pl-focus .ph-hint,
+body.pl-focus .pl-actions > :not(#pl-full), body.pl-focus .pl-time { display: none !important; }
+body.pl-focus #view-play { padding: 12px 16px; gap: 10px; }
+body.pl-focus .tabstrip { height: 34vh; }
+body.pl-focus .board-wrap { flex: 1; min-height: 0; display: flex; }
+body.pl-focus .board-wrap .board { height: 100%; min-height: 240px; }
+body.pl-focus .np-box.big b { font-size: 60px; }
+
+/* tab version picker */
+.ver-list { display: grid; gap: 8px; max-height: 56vh; overflow: auto; }
+.ver { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.ver.on { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.ver-main { flex: 1; min-width: 0; }
+.ver-tags, .ver-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 12.5px; }
+.ver-tags span, .ver-parts span { padding: 2px 8px; border-radius: 7px; background: var(--card); color: var(--muted); }
+.ver-tags span.good { color: #7ed98b; }
+.ver-parts i { font-style: normal; color: var(--muted); margin-left: 4px; }
+.ver-parts span { color: var(--text); }
+.ver-cur { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: var(--accent); }
+.ver-paste { display: flex; gap: 8px; }
+.ver-paste input { flex: 1; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 14px var(--font); }
+body.pl-focus .tabstrip { height: 230px; }
