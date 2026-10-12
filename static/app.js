@@ -448,24 +448,56 @@ function drawTab() {
     if (TSHOW.chords && b.chord && b.chord !== lastChord) h += `<text class="tchord" x="${x + 3}" y="${Z > 1.3 ? 30 : 31}">${esc(spell(b.chord))}</text>`;
     lastChord = b.chord;
   });
+  // techniques as shapes (no letters): hammer-on / pull-off = an arc to the next note on that string, slide = a slanted
+  // line to it, slide in / out = a short slanted line, bend = an arrow up, vibrato = a wavy line, muted = x
+  const lastOn = {};   // string -> {x, w, fl} of the previous note (to join arcs / slides)
+  let tech = "";
+  const flagWords = { pm: "P.M.", lr: "let ring", tr: "tremolo", wh: "whammy", gr: "grace" };
   d.beats.forEach(([t, dur, bar, notes, bf], i) => {
     const x = t * PX + 6;
     let s = `<g class="tb" id="tb${i}">`;
     for (const [st, f, fl] of notes) {
       if (!TSHOW.held && fl.includes("t")) continue;  // still ringing: not picked again
       if (!TSHOW.muted && fl.includes("x")) continue;
-      let label = fl.includes("x") ? "x" : fl.includes("H") ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
+      const label = fl.includes("x") ? "x" : /[HP]/.test(fl) ? `<${f}>` : fl.includes("g") || fl.includes("t") ? `(${f})` : String(f);
+      const w = (label.length * 8 + 4) * Z, y = ys(st), prev = lastOn[st];
+      s += `<rect class="tbg" x="${x - 2}" y="${y - 8 * Z}" width="${w}" height="${16 * Z}" rx="3"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${y + 5 * Z}">${esc(label)}</text>`;
       if (TSHOW.tech) {
-        if (/[iI]/.test(fl)) label = (fl.includes("i") ? "/" : "\\") + label;
-        if (/[bB]/.test(fl)) label += fl.includes("B") ? "B" : "b"; if (fl.includes("h")) label += "h";
-        if (fl.includes("s")) label += "/"; if (fl.includes("o")) label += "\\"; if (fl.includes("O")) label += "/"; if (fl.includes("v")) label += "~";
+        if (prev && /[h]/.test(prev.fl)) {  // hammer-on / pull-off: an arc from the previous note
+          const x1 = prev.x + prev.w / 2, x2 = x + w / 2 - 4, top = y - 15 * Z;
+          tech += `<path class="tq-arc" d="M${x1} ${y - 9 * Z} Q${(x1 + x2) / 2} ${top - 6 * Z} ${x2} ${y - 9 * Z}"/>`;
+        }
+        if (prev && /s/.test(prev.fl)) {   // slide: a slanted line from the previous note, up or down the neck
+          const up = f > prev.f, x1 = prev.x + prev.w + 1, x2 = x - 3;
+          tech += `<line class="tq-slide" x1="${x1}" y1="${y + (up ? 5 : -5) * Z}" x2="${x2}" y2="${y + (up ? -5 : 5) * Z}"/>`;
+        }
+        if (/[iI]/.test(fl)) tech += `<line class="tq-slide" x1="${x - 14 * Z}" y1="${y + (fl.includes("i") ? 5 : -5) * Z}" x2="${x - 3}" y2="${y + (fl.includes("i") ? -5 : 5) * Z}"/>`;
+        if (/[oO]/.test(fl)) tech += `<line class="tq-slide" x1="${x + w + 1}" y1="${y + (fl.includes("O") ? 5 : -5) * Z}" x2="${x + w + 14 * Z}" y2="${y + (fl.includes("O") ? -5 : 5) * Z}"/>`;
+        if (/[bBq]/.test(fl)) {           // bend: a curved arrow up, size by the step
+          const hgt = (fl.includes("B") ? 15 : fl.includes("b") ? 11 : 7) * Z, bx = x + w + 2;
+          tech += `<path class="tq-bend" d="M${bx} ${y} Q${bx + 9 * Z} ${y} ${bx + 9 * Z} ${y - hgt}"/><path class="tq-head" d="M${bx + 9 * Z - 4} ${y - hgt + 5} L${bx + 9 * Z} ${y - hgt} L${bx + 9 * Z + 4} ${y - hgt + 5}"/>`;
+          if (fl.includes("r")) tech += `<path class="tq-bend" d="M${bx + 9 * Z} ${y - hgt} Q${bx + 18 * Z} ${y - hgt} ${bx + 18 * Z} ${y}"/>`;
+        }
+        if (/[vV]/.test(fl)) {            // vibrato: a wavy line above the note
+          const vx = x - 1, vy = y - 12 * Z, amp = (fl.includes("V") ? 3 : 2) * Z;
+          let path = `M${vx} ${vy}`;
+          for (let k = 1; k <= 6; k++) path += ` Q${vx + (k - 0.5) * 3.5 * Z} ${vy + (k % 2 ? -amp : amp)} ${vx + k * 3.5 * Z} ${vy}`;
+          tech += `<path class="tq-vib" d="${path}"/>`;
+        }
       }
-      const w = (label.length * 7 + 4) * Z;
-      s += `<rect class="tbg" x="${x - 2}" y="${ys(st) - 7 * Z}" width="${w}" height="${14 * Z}"/><text class="tnote ${fl.includes("t") ? "tied" : ""}" x="${x}" y="${ys(st) + 4 * Z}">${esc(label)}</text>`;
+      lastOn[st] = { x, w, fl, f };
     }
-    if (bf && TSHOW.tech) s += `<text class="tflag" x="${x}" y="${yEnd + 16 * Z}">${bf.replace("pm", "P.M.").replace("lr", "let ring").replace("tr", "tremolo")}</text>`;
+    if (bf && TSHOW.tech) {
+      const words = bf.split(" ").map((k) => flagWords[k]).filter(Boolean).join(" · ");
+      if (words) s += `<text class="tflag" x="${x}" y="${yEnd + 16 * Z}">${words}</text>`;
+      if (/\bs[du]\b/.test(bf)) {        // strum direction: a small arrow under the strings
+        const dn = /\bsd\b/.test(bf);
+        s += `<path class="tq-strum" d="M${x + 4} ${yEnd + (dn ? 22 : 34) * Z} L${x + 4} ${yEnd + (dn ? 34 : 22) * Z} M${x} ${yEnd + (dn ? 30 : 26) * Z} L${x + 4} ${yEnd + (dn ? 34 : 22) * Z} L${x + 8} ${yEnd + (dn ? 30 : 26) * Z}"/>`;
+      }
+    }
     h += s + "</g>";
   });
+  h += `<g class="tq">${tech}</g>`;
   // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
   // lyrics: ONE lane. A syllable sits where it's sung; if the one before still takes that space it flows a little to the
   // right and catches up. A syllable held long gets dashes up to the next one, so you see it's being sung long.
@@ -1367,8 +1399,10 @@ setInterval(() => { const b = $("#pl-playbtn"); if (b) b.innerHTML = P.info && P
 /* smooth tab: the strip slides every screen refresh (60 fps), moved by the GPU; the rest updates 20x a second */
 const tabG = $("#tab-g");
 tabG.style.willChange = "transform";
-function tabScroll() {
-  requestAnimationFrame(tabScroll);
+function tabScroll() { requestAnimationFrame(tabScroll); tabMove(); }
+setInterval(() => { if (performance.now() - (P.movedAt || 0) > 80) tabMove(); }, 50);  // backup when screen refreshes pause
+function tabMove() {
+  P.movedAt = performance.now();
   if (tab !== "play" || TVIEW !== "tab" || !usingTab()) return;
   const x = (P.headX || 200) - playTime() * (P.PXdraw || P.PX) - 6;
   tabG.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;

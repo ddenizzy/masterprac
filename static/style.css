@@ -541,3 +541,9 @@ details.dd.more .seg { width: 100%; } details.dd.more .seg .seg-b { flex: 1; }
 .part-b .share { display: block; width: 34px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .part-b .share b { display: block; height: 100%; background: currentColor; opacity: .8; }
 .part-b.auto { outline: 2px dashed currentColor; outline-offset: 2px; }
+
+/* techniques on the tab, as shapes */
+.tq-arc, .tq-bend, .tq-vib, .tq-head, .tq-strum { fill: none; stroke: #b45f00; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tq-slide { stroke: #b45f00; stroke-width: 2.2; stroke-linecap: round; }
+.tq-strum { stroke: #8a7f70; stroke-width: 1.6; }
+body.neon :is(.tq-arc, .tq-bend, .tq-vib, .tq-head) { stroke: #ffd27a; } body.neon .tq-slide { stroke: #ffd27a; } body.neon .tq-strum { stroke: #7e7cc0; }
