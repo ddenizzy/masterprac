@@ -31,6 +31,29 @@ def _same_origin_only():
         return jsonify({"error": "Not allowed from another website."}), 403
 
 
+@app.get("/api/settings")
+def settings_get():
+    return jsonify({"mute_spotify": h.load("settings", {}).get("mute_spotify", False)})
+
+
+@app.post("/api/settings")
+def settings_set():
+    """{mute_spotify: bool}: also acts now (mute / pause Spotify, or give it its volume back)."""
+    b = request.get_json(force=True) or {}
+    st = h.load("settings", {})
+    msg = ""
+    if "mute_spotify" in b:
+        st["mute_spotify"] = bool(b["mute_spotify"])
+        if st["mute_spotify"]:
+            if h.spotify_now().get("state") == "playing":
+                msg = h.spotify_mute() if h.plugged_in() else h.spotify_pause()
+        else:
+            msg = h.spotify_restore()
+        log(f"Mute Spotify while practising: {'on' if st['mute_spotify'] else 'off'}. {msg}")
+    h.save("settings", st)
+    return jsonify({**st, "message": msg})
+
+
 SHOW_WINDOW = {"fn": None}  # set by main.py: bring the window to the front
 
 

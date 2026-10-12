@@ -261,7 +261,10 @@ def start_session(api):
         log("(Test mode: Spotify and Bluetooth were left alone.)")
         return
     if sp["state"] == "playing":
-        log(h.spotify_mute() if h.plugged_in() else h.spotify_pause())
+        if h.load("settings", {}).get("mute_spotify", False):  # off unless you turn it on (Options)
+            log(h.spotify_mute() if h.plugged_in() else h.spotify_pause())
+        else:
+            log("Spotify keeps playing as it is (muting is off: Options > Mute Spotify while I practise).")
     # the amp first: only let go of the speakers if the amp really connected (amp off = sound stays where it was)
     ok, msg = h.bt_connect(h.AMP_BT)
     if ok:

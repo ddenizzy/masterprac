@@ -358,3 +358,43 @@ body.neon .tlyric { fill: #b8b6e8; } body.neon .tlyric.first { fill: #f1f0ff; } 
 body.neon .tab-sync { background: #0d0d1a; border-color: #2b2560; color: #9a98c6; } body.neon .tab-sync.ok { color: #39ff88; }
 body.neon .tab-empty { color: #9a98c6; }
 body.neon .np-box.big b { color: #39ff88; text-shadow: 0 0 18px #39ff8866; }
+
+/* smooth page changes */
+.view.enter { animation: view-in .22s ease-out; }
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.pl-body { transition: opacity .18s; }
+/* Tab | Highway */
+.view-seg .seg-b { padding: 4px 12px; font-size: 13px; }
+.look-seg .seg-b { padding: 7px 12px; }
+.highway { position: relative; height: 330px; border-radius: 14px; overflow: hidden; flex-shrink: 0; background: #04040a; box-shadow: inset 0 0 0 1px #2b2560; }
+.highway canvas { width: 100%; height: 100%; display: block; }
+.highway.off, .tabstrip.off { display: none !important; }
+body.pl-focus .highway { height: 46vh; }
+/* two colours on alternating strings (Neon) */
+body.neon.two-colors .board .string.s0, body.neon.two-colors .board .string.s2, body.neon.two-colors .board .string.s4 { stroke: #22e6ff; filter: drop-shadow(0 0 3px #22e6ff); }
+body.neon.two-colors .board .string.s1, body.neon.two-colors .board .string.s3, body.neon.two-colors .board .string.s5 { stroke: #ff2bd6; filter: drop-shadow(0 0 3px #ff2bd6); }
+body.neon.two-colors .board :is(.note.play.s0, .note.play.s2, .note.play.s4) circle,
+body.neon.two-colors .board :is(.fx-trail.s0, .fx-trail.s2, .fx-trail.s4) { fill: #22e6ff; }
+body.neon.two-colors .board :is(.note.play.s1, .note.play.s3, .note.play.s5) circle,
+body.neon.two-colors .board :is(.fx-trail.s1, .fx-trail.s3, .fx-trail.s5) { fill: #ff2bd6; }
+body.neon.two-colors .board :is(.note.play.s0, .note.play.s2, .note.play.s4) text { fill: #001a1f; }
+body.neon.two-colors .board :is(.note.play.s1, .note.play.s3, .note.play.s5) text { fill: #fff; }
+body.neon.two-colors .board :is(.fx-string.s0, .fx-string.s2, .fx-string.s4) { stroke: #22e6ff; filter: drop-shadow(0 0 10px #22e6ff); }
+body.neon.two-colors .board :is(.fx-string.s1, .fx-string.s3, .fx-string.s5) { stroke: #ff2bd6; filter: drop-shadow(0 0 10px #ff2bd6); }
+
+.view.enter { animation: view-in .22s ease-out backwards; }
+@keyframes view-in { from { opacity: .001; transform: translateY(6px); } }
+
+/* tab header: one compact row, close to the tab */
+.pl-ph { gap: 8px; margin-bottom: -8px; flex-wrap: nowrap; min-width: 0; }
+.pl-ph .show-row { margin-left: 6px; gap: 4px; flex-wrap: nowrap; }
+.pl-ph .chip-t { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
+.pl-ph .tab-part { gap: 5px; min-width: 0; }
+.pl-ph .part-btns { gap: 4px; min-width: 0; }
+.pl-ph .part-b { font-size: 12px; padding: 4px 9px; border-width: 1.5px; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.pl-ph .part-b i { font-size: 10.5px; }
+.pl-ph .view-seg { flex-shrink: 0; }
+@media (max-width: 1350px) { .pl-ph .show-row > .kicker, .pl-ph .tab-part > .kicker { display: none; } }
+
+.pl-ph .tab-rest { white-space: nowrap; flex-shrink: 0; font-size: 12px; padding: 3px 4px 3px 10px; }
+.pl-ph .tab-rest button.ghost { white-space: nowrap; }

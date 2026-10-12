@@ -159,7 +159,7 @@ const lastAt = (arr, t, key) => { let lo = 0, hi = arr.length - 1, ans = -1; whi
 function fretboard(svg, o) {
   const W = svg.clientWidth || 1000, H = svg.clientHeight || 300, FR = o.frets || 15;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const left = 58, right = 22, top = 40, bottom = 30;
+  const left = 84, right = 22, top = 40, bottom = 30;  // the string names get their own space on the left
   // real guitar spacing: frets get closer up the neck
   const scaleLen = (W - left - right) / (1 - Math.pow(2, -FR / 12));
   const fx = (f) => left + scaleLen * (1 - Math.pow(2, -f / 12));
@@ -178,26 +178,26 @@ function fretboard(svg, o) {
   for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 20}">${f}</text>`;
   tuning.forEach((open, s) => {
     g += `<line class="string s${s}" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1.6 + s * 0.6}"/>`;
-    g += `<text class="sname" x="4" y="${sy(s) + 4}">${nn(open % 12)}</text>`;
+    g += `<text class="sname" x="10" y="${sy(s) + 5}">${nn(open % 12)}</text>`;
     for (let f = 0; f <= FR; f++) {
       const pc = (open + f) % 12;
       const isChord = chordTones.includes(pc), iv = key ? (pc - key.root + 12) % 12 : null;
       const inScale = key && scale.includes(iv);
       if (!(inScale || isChord) || !inArea(f)) continue;
       const cls = key && iv === 0 && (inScale || isChord) ? "root" : isChord ? "chord" : "scale";
-      const x = f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2, label = mode === "intervals" && key ? INTERVAL[iv] : nn(pc);
+      const x = f === 0 ? left - 26 : (fx(f - 1) + fx(f)) / 2, label = mode === "intervals" && key ? INTERVAL[iv] : nn(pc);
       g += `<g class="note ${cls} ${isChord ? "hot" : ""} ${o.dim ? "dim" : ""}"><circle cx="${x}" cy="${sy(s)}" r="${isChord ? r + 1.5 : r}"/><text x="${x}" y="${sy(s) + 5}">${label}</text></g>`;
     }
   });
   // what the guitarist plays now (filled) and next (outlined), on the exact string/fret
   const spot = (s, f, cls) => {
     if (s >= strings) return "";
-    const x = f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2;
+    const x = f === 0 ? left - 26 : (fx(f - 1) + fx(f)) / 2;
     return `<g class="note ${cls}"><circle cx="${x}" cy="${sy(s)}" r="${cls === "play" ? r + 5 : r + 3}"/><text x="${x}" y="${sy(s) + 5}">${f}</text></g>`;
   };
   for (const [s, f] of o.next || []) g += spot(s, f, "next");
   // techniques on the notes played now: an arrow along the string to where a slide / hammer-on goes, badges for the rest
-  const xAt = (f) => (f === 0 ? left - 20 : (fx(f - 1) + fx(f)) / 2);
+  const xAt = (f) => (f === 0 ? left - 26 : (fx(f - 1) + fx(f)) / 2);
   for (const [s, f, fl = ""] of o.now || []) {
     if (s >= strings) continue;
     const to = (o.ahead || o.next || []).find((n) => n[0] === s && n[1] !== f);  // where the slide / hammer-on goes
@@ -305,15 +305,15 @@ function partName(t) {
 function restNote(bi) {
   const d = P.tab, me = d.tracks.find((t) => t.i === d.lead), box = $("#tab-rest");
   const hint = $("#tab-hint");
-  if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); hint.classList.remove("hidden"); return; }
+  if (!me || !me.active || me.active[bi] === "1" || me.active[bi + 1] === "1") { box.classList.add("hidden"); return; }
   hint.classList.add("hidden");
   let n = 0; while (bi + n < me.active.length && me.active[bi + n] !== "1") n++;
   const other = d.tracks.find((t) => t.i !== d.lead && t.active && t.active[bi] === "1");
   const left = bi + n >= me.active.length;
   box.innerHTML = other || !tabIncomplete()
-    ? `${left ? "This part is done for the song." : `This part rests here for ${n} bar${n > 1 ? "s" : ""}.`}
-      ${other ? `<button class="ghost" data-part="${other.i}">Follow ${esc(partName(other))} instead</button>` : ""}`
-    : `Songsterr's tab has no guitar written here (it's unfinished). The chords above still follow the song.`;
+    ? `${left ? "Part done" : `Rests ${n} bar${n > 1 ? "s" : ""}`}
+      ${other ? `<button class="ghost" data-part="${other.i}" title="Follow ${esc(other.name || partName(other))} instead">Follow ${esc(partName(other).split(" · ").pop())}</button>` : ""}`
+    : `No guitar written here`;
   box.classList.remove("hidden");
 }
 // an unfinished tab: even its busiest guitar part has notes in under a quarter of the bars
@@ -563,8 +563,9 @@ function applyCollapsed() {
 // full screen: just the chord, the tab and the fretboard (Esc or the button to leave)
 function setFull(on) {
   document.body.classList.toggle("pl-focus", on);
-  $("#pl-full").textContent = on ? "Leave full screen" : "Full screen";
-  if (api() && api().fullscreen) api().fullscreen(on);
+  $("#pl-full").textContent = on ? "Show everything" : "Full screen";
+  // entering also puts the window in macOS full screen; leaving only leaves the focus view (the app stays full screen)
+  if (on && api() && api().fullscreen) api().fullscreen(true);
   setTimeout(() => { layoutTab(); drawPlayBoard(); }, 400);
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("pl-focus")) setFull(false); });
@@ -959,7 +960,8 @@ function fxDraw() {
       const a = Math.max(0, 1 - Math.max(0, (t - n.t0) / Math.max(0.25, n.dur)));
       h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
     }
-    h += `<g class="note play s${n.s}" opacity="${q.fade.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${geo.r + 5}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
+    const rr = q.fret === 0 ? geo.r : geo.r + 5;  // smaller by the nut, so it never covers the string names
+    h += `<g class="note play s${n.s}" opacity="${q.fade.toFixed(2)}"><circle cx="${q.x}" cy="${q.y}" r="${rr}"/><text x="${q.x}" y="${q.y + 5}">${q.fret}</text></g>`;
   }
   FX.trails = FX.trails.filter((p) => now - p.at < 220);  // fast fade
   trail.innerHTML = FX.trails.map((p) => { const a = 1 - (now - p.at) / 220;
@@ -973,6 +975,145 @@ function setLook(look) {
   document.body.classList.toggle("neon", look === "neon");
   try { localStorage.setItem("mp-look", look); } catch (e) { /* fine */ }
   $("#o-look").value = look;
+  document.querySelectorAll("[data-look]").forEach((b) => b.classList.toggle("on", b.dataset.look === look));
 }
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-look]"); if (b) setLook(b.dataset.look); });
+// string colours: two alternating (easier on the eyes) or one per string (Guitar Hero)
+function setStrings(v) {
+  document.body.classList.toggle("two-colors", v !== "each");
+  try { localStorage.setItem("mp-strings", v); } catch (e) { /* fine */ }
+  $("#o-strings").value = v;
+}
+try { setStrings(localStorage.getItem("mp-strings") || "two"); } catch (e) { setStrings("two"); }
+$("#o-strings").addEventListener("change", (e) => setStrings(e.target.value));
 try { setLook(localStorage.getItem("mp-look") || "classic"); } catch (e) { setLook("classic"); }
 $("#o-look").addEventListener("change", (e) => setLook(e.target.value));
+
+/* ---------- smooth page changes ---------- */
+const _setTab = setTab;
+setTab = function (name) {  // eslint-disable-line no-func-assign
+  _setTab(name);
+  const v = $(`#view-${name}`);
+  if (v) {  // fade in; fail safe: the class goes away even if the animation never runs
+    v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
+    clearTimeout(v._enterT); v._enterT = setTimeout(() => v.classList.remove("enter"), 300);
+  }
+};
+
+/* ---------- Tab | Highway (Guitar Hero style: notes come toward you down a lane per string) ---------- */
+let TVIEW = "tab";
+try { TVIEW = localStorage.getItem("pl-tview") || "tab"; } catch (e) { /* fine */ }
+function setTView(v) {
+  TVIEW = v;
+  try { localStorage.setItem("pl-tview", v); } catch (e) { /* fine */ }
+  document.querySelectorAll("[data-tview]").forEach((b) => b.classList.toggle("on", b.dataset.tview === v));
+  $("#highway").classList.toggle("off", v !== "highway");
+  $("#tabstrip").classList.toggle("off", v === "highway");
+  if (v === "tab") { layoutTab(); drawTab(); }
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-tview]"); if (b) setTView(b.dataset.tview); });
+$("#highway").classList.remove("hidden");
+setTView(TVIEW);
+
+const LANE_EACH = ["#c27bff", "#ff9a3b", "#3bb8ff", "#ffe23b", "#ff3b5c", "#39ff88"];  // high E ... low E
+const laneColor = (s) => document.body.classList.contains("two-colors") ? (s % 2 ? "#ff2bd6" : "#22e6ff") : LANE_EACH[s] || "#fff";
+const AHEAD = 2.6;  // seconds of song visible on the highway
+function hwDraw() {
+  if (tab !== "play" || TVIEW !== "highway" || !usingTab()) return;
+  const cv = $("#hw-canvas"), box = cv.parentElement;
+  const dpr = window.devicePixelRatio || 1, W = box.clientWidth, H = box.clientHeight;
+  if (!W || !H) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const d = P.tab, T = playTime(), lanes = d.tuning.length;
+  const hitY = H - 44, topY = 26, cx = W / 2, near = Math.min(W * 0.66, 820), far = near * 0.3;
+  const depth = (p) => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 2);  // simple perspective: far notes bunch up
+  const yAt = (p) => hitY - (hitY - topY) * depth(p), wAt = (p) => near + (far - near) * depth(p);
+  const xAt = (lane, p) => cx - wAt(p) / 2 + wAt(p) * (lane + 0.5) / lanes;  // lane 0 = low E (left), like Guitar Hero
+  const laneOf = (s) => lanes - 1 - s;
+  // background + the highway
+  const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#04040a"); bg.addColorStop(1, "#0c0920");
+  c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  c.beginPath(); c.moveTo(cx - far / 2, topY); c.lineTo(cx + far / 2, topY); c.lineTo(cx + near / 2, hitY + 30); c.lineTo(cx - near / 2, hitY + 30); c.closePath();
+  const hw = c.createLinearGradient(0, topY, 0, hitY); hw.addColorStop(0, "#0b0b1c"); hw.addColorStop(1, "#191438");
+  c.fillStyle = hw; c.fill();
+  // lanes
+  for (let l = 0; l < lanes; l++) {
+    const s = lanes - 1 - l, col = laneColor(s);
+    c.strokeStyle = col; c.globalAlpha = 0.28; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(xAt(l, 1), topY); c.lineTo(xAt(l, 0), hitY + 30); c.stroke();
+  }
+  c.globalAlpha = 1;
+  // bar lines scrolling toward you
+  for (const b of d.bars) {
+    const p = (b.t - T) / AHEAD;
+    if (p < 0 || p > 1) continue;
+    c.strokeStyle = "#ffffff"; c.globalAlpha = 0.12 + 0.2 * (1 - p); c.lineWidth = 1 + 2 * (1 - p);
+    c.beginPath(); c.moveTo(cx - wAt(p) / 2, yAt(p)); c.lineTo(cx + wAt(p) / 2, yAt(p)); c.stroke();
+  }
+  c.globalAlpha = 1;
+  // the hit line + a target ring per lane
+  c.shadowBlur = 18; c.shadowColor = "#ff2bd6"; c.strokeStyle = "#ff2bd6"; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(cx - near / 2, hitY); c.lineTo(cx + near / 2, hitY); c.stroke(); c.shadowBlur = 0;
+  for (let l = 0; l < lanes; l++) {
+    const s = lanes - 1 - l;
+    c.strokeStyle = laneColor(s); c.lineWidth = 3; c.globalAlpha = 0.8;
+    c.beginPath(); c.arc(xAt(l, 0), hitY, 17, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = 0.9; c.fillStyle = "#cfcdf5"; c.font = "700 12px -apple-system, sans-serif"; c.textAlign = "center";
+    c.fillText(nn(d.tuning[s] % 12), xAt(l, 0), hitY + 34);
+  }
+  c.globalAlpha = 1;
+  // the notes: far to near, held notes with a tail, a flash when they hit the line
+  const from = lastAt(d.beats, T - 0.35, (b) => b[0]);
+  for (let i = Math.max(0, from); i < d.beats.length; i++) {
+    const [t, dur, , notes] = d.beats[i];
+    if (t > T + AHEAD) break;
+    const p = (t - T) / AHEAD;
+    for (const [s, f, fl] of notes) {
+      if (fl.includes("t") || s >= lanes) continue;
+      const l = laneOf(s), col = laneColor(s);
+      if (dur > 0.45 && !fl.includes("x")) {  // a held note: a tail to where it ends
+        const p2 = Math.min(1, (t + dur - T) / AHEAD), p1 = Math.max(0, p);
+        if (p2 > 0) { c.strokeStyle = col; c.globalAlpha = 0.55; c.lineWidth = 7 * (1 - depth(p1) * 0.6);
+          c.beginPath(); c.moveTo(xAt(l, p1), yAt(p1)); c.lineTo(xAt(l, p2), yAt(p2)); c.stroke(); c.globalAlpha = 1; }
+      }
+      if (p < -0.02) {  // just hit: a quick flash on the line
+        const a = 1 + p / 0.13;
+        if (a > 0) { c.globalAlpha = a; c.shadowBlur = 30; c.shadowColor = col; c.fillStyle = col;
+          c.beginPath(); c.arc(xAt(l, 0), hitY, 22 + 10 * (1 - a), 0, Math.PI * 2); c.fill(); c.shadowBlur = 0; c.globalAlpha = 1; }
+        continue;
+      }
+      const r = 16 * (1 - depth(p) * 0.62), x = xAt(l, p), y = yAt(p);
+      if (f === 0 && !fl.includes("x")) {  // open string: a bar across its lane
+        c.fillStyle = col; c.shadowBlur = 14; c.shadowColor = col;
+        c.fillRect(x - wAt(p) / lanes / 2 + 3, y - r * 0.45, wAt(p) / lanes - 6, r * 0.9); c.shadowBlur = 0;
+      } else {
+        c.shadowBlur = 16; c.shadowColor = col; c.fillStyle = fl.includes("x") ? "#77758f" : col;
+        c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0;
+        c.lineWidth = 2; c.strokeStyle = "#ffffff"; c.stroke();
+      }
+      c.fillStyle = "#0b0716"; c.font = `800 ${Math.max(9, r * 0.95)}px -apple-system, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle";
+      c.fillText(fl.includes("x") ? "x" : String(f), x, y + 0.5); c.textBaseline = "alphabetic";
+      if (/[sbBhvioIO]/.test(fl) && r > 9) {  // technique letter above the gem
+        c.fillStyle = "#ffd27a"; c.font = `800 ${Math.max(9, r * 0.7)}px -apple-system, sans-serif`;
+        c.fillText(/[siIoO]/.test(fl) ? "slide" : /[bB]/.test(fl) ? "bend" : fl.includes("h") ? "h" : "~", x, y - r - 4);
+      }
+    }
+  }
+  // chord now -> next, top left
+  c.textAlign = "left"; c.fillStyle = "#39ff88"; c.font = "800 26px -apple-system, sans-serif";
+  c.fillText(spell(P.chord) || "", 18, 40);
+  c.fillStyle = "#9a98c6"; c.font = "600 13px -apple-system, sans-serif";
+  c.fillText($("#pl-next").textContent !== "-" ? `next ${$("#pl-next").textContent} ${$("#pl-in").textContent}` : "", 18, 60);
+}
+const _fxDraw = fxDraw;
+fxDraw = function () { _fxDraw(); hwDraw(); };  // eslint-disable-line no-func-assign
+
+/* ---------- Mute Spotify while I practise (off unless turned on) ---------- */
+fetch("/api/settings").then((r) => r.json()).then((st) => { $("#o-mute").checked = !!st.mute_spotify; }).catch(() => {});
+$("#o-mute").addEventListener("change", async (e) => {
+  const r = await (await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mute_spotify: e.target.checked }) })).json();
+  toast(r.message || (r.mute_spotify ? "Spotify will be muted while you practise" : "Spotify keeps playing"));
+  refresh();
+});

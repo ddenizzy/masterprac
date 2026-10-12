@@ -53,6 +53,7 @@
         <button class="ghost" id="pl-chords" title="Every chord of the song, part by part">Song chords</button>
         <button class="ghost" id="pl-options" title="What the fretboard shows, which guitar part, timing">Options</button>
         <button class="ghost" id="pl-full" title="Only the chord, the tab and the fretboard, over the whole screen (Esc to leave)">Full screen</button>
+        <div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div>
         <button id="pl-open" disabled>Open in Songsterr &#8599;</button>
       </div>
     </div>
@@ -65,7 +66,7 @@
       <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
     </div>
 
-    <div class="pl-ph" data-panel="tab"><span class="kicker">TAB</span><span class="sub ph-hint" id="tab-hint">scrolls with the music</span>
+    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button></div><span class="sub ph-hint hidden" id="tab-hint"></span>
       <span class="tab-rest hidden" id="tab-rest"></span>
       <span class="show-row"><span class="kicker">SHOW</span>
         <button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
@@ -77,6 +78,7 @@
       <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
       <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
       <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
+    <div class="highway pl-body hidden" data-body="tab" id="highway"><canvas id="hw-canvas"></canvas></div>
     <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
       <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
       <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
@@ -99,6 +101,7 @@
   <div class="pop hidden" id="pop-options"><div class="pop-card">
     <div class="pop-head"><b>Options</b><button class="ghost icon" data-close>&#10005;</button></div>
     <label>Look <select id="o-look"><option value="classic">Classic (wood and paper)</option><option value="neon">Neon (Guitar Hero style)</option></select></label>
+    <label>String colours (Neon) <select id="o-strings"><option value="two">Two colours, every other string (easier)</option><option value="each">A colour for each string (Guitar Hero)</option></select></label>
     <label>Notes on the fretboard <select id="o-scale">
       <option value="pent">The 5 safest (pentatonic)</option><option value="full">All 7 notes of the key</option>
       <option value="blues">Bluesy (pentatonic + blue note)</option><option value="chord">Only the chord playing now</option></select></label>
@@ -106,6 +109,7 @@
     <label>Dots show <select id="o-labels"><option value="names">Note names (A, C#)</option><option value="intervals">Note jobs (R = home, b3 = sad note, 5 = strong note)</option></select></label>
     <label>Part of the neck <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1 (one hand position, learn this first)</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></label>
     <label>Chords come from <select id="o-src"><option value="tab">The song's tab (exact)</option><option value="ear">Listening (by ear)</option></select></label>
+    <label class="o-check"><input type="checkbox" id="o-mute"> Mute Spotify while I practise (it keeps playing, so your listening counts)</label>
     <label class="o-check"><input type="checkbox" id="o-autosync" checked> Sync the tab to the music by listening (automatic)</label>
     <div class="o-row"><span>Timing: chords or notes early/late?</span>
       <button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></div>
@@ -166,8 +170,8 @@
           Songsterr and scrolls it with the music. <b>Jam</b> shows the chord now and the notes that sound good over it;
           <b>Learn the part</b> shows the exact string and fret the guitarist plays. No tab for a song? The chords are worked out by ear.</li>
         <li><b>Songsterr tab:</b> a browser built into the app. Open any song; MasterPrac recognises it and the other tabs follow it.</li>
-        <li><b>When it opens,</b> it finds the song Spotify is playing, mutes Spotify (still playing, so your minutes count; paused on battery)
-          and moves the Mac's sound to your HeadRush over Bluetooth.</li>
+        <li><b>When it opens,</b> it finds the song Spotify is playing and moves the Mac's sound to your HeadRush over Bluetooth
+          (only if the amp is on). Muting Spotify is off unless you turn it on in Play &gt; Options.</li>
         <li><b>When you close it,</b> the sound goes back to your Kali speakers and Spotify's volume comes back.</li>
         <li><b>Your saved rigs are never changed.</b></li>
       </ol>
