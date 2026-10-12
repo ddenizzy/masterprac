@@ -546,6 +546,12 @@ function syncSolve() {
     SYNC.keyNote = bestShift ? `<b>This recording is ${Math.abs(up)} half-step${Math.abs(up) > 1 ? "s" : ""} ${up > 0 ? "higher" : "lower"} than the tab.</b> ${up > 0 ? `Put a capo on fret ${up} and play the tab as written.` : `Tune down ${-up} half-step${up < -1 ? "s" : ""} to play along.`}` : "";
     headsUp();
   }
+  // stick with the current timing unless the new one is clearly better (no jumping back and forth)
+  const here = scores.find((x) => Math.abs(x.o - P.offset) < 0.13);
+  if (SYNC.state === "locked" && here && best.s - here.s < 0.03) {
+    syncStatus(`Synced by ear ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
+    return;
+  }
   if (best.s > 0.5 && best.s - median > 0.06) {  // a clear winner: use it
     if (Math.abs(best.o - P.offset) >= 0.25) {
       P.offset = best.o; showOffset(); P.sig = "";
