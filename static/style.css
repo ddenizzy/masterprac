@@ -607,3 +607,19 @@ body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph, bod
 
 .pr-secs { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pr-secs .chip-t.on { background: var(--accent); color: #1a1208; border-color: var(--accent); }
+
+/* windows: centred with margins, not a transform (the slide-in animation replaced the transform, so the Songsterr
+   browser measured its place half a window to the right) */
+.view.win { left: 0; right: 0; margin: 0 auto; transform: none; }
+
+/* lyrics: karaoke lines under the tab, standing still while they're sung */
+.ly-bar { position: absolute; left: 30px; right: 14px; bottom: 6px; pointer-events: none; line-height: 1.25; white-space: nowrap; overflow: hidden; }
+.ly-now { font: 750 18px -apple-system, "SF Pro Rounded", var(--font); color: #8c8174; min-height: 23px; text-overflow: ellipsis; overflow: hidden; }
+.ly-now span { transition: color .15s; }
+.ly-now .sung { color: #1c1712; }
+.ly-now .on { color: #e8461a; }
+.ly-now .dash { color: #c8bcac; } .ly-now .dash.sung, .ly-now .dash.on { color: #e8461a; }
+.ly-next { font: 600 13px -apple-system, "SF Pro Rounded", var(--font); color: #a89c8d; min-height: 17px; text-overflow: ellipsis; overflow: hidden; }
+body.neon .ly-now { color: #6d6aa8; } body.neon .ly-now .sung { color: #f1f0ff; } body.neon .ly-now .on, body.neon .ly-now .dash.sung { color: #c9b0ff; }
+body.neon .ly-next { color: #5d5b99; }
+body.pl-focus .ly-now { font-size: 24px; min-height: 30px; } body.pl-focus .ly-next { font-size: 16px; }
