@@ -269,9 +269,16 @@ function restNote(bi) {
   let n = 0; while (bi + n < me.active.length && me.active[bi + n] !== "1") n++;
   const other = d.tracks.find((t) => t.i !== d.lead && t.active && t.active[bi] === "1");
   const left = bi + n >= me.active.length;
-  box.innerHTML = `${left ? "This part is done for the song." : `This part rests here for ${n} bar${n > 1 ? "s" : ""}.`}
-    ${other ? `<button class="ghost" data-part="${other.i}">Follow ${esc(partName(other))} instead</button>` : ""}`;
+  box.innerHTML = other || !tabIncomplete()
+    ? `${left ? "This part is done for the song." : `This part rests here for ${n} bar${n > 1 ? "s" : ""}.`}
+      ${other ? `<button class="ghost" data-part="${other.i}">Follow ${esc(partName(other))} instead</button>` : ""}`
+    : `Songsterr's tab has no guitar written here (it's unfinished). The chords above still follow the song.`;
   box.classList.remove("hidden");
+}
+// an unfinished tab: even its busiest guitar part has notes in under a quarter of the bars
+function tabIncomplete() {
+  const d = P.tab, most = Math.max(0, ...d.tracks.map((t) => t.played || 0));
+  return d.tracks.length && most < d.bars.length * 0.25 ? most : false;
 }
 function setPart(i) {
   if (!P.songId) return;
@@ -402,6 +409,8 @@ function headsUp(extra) {
   if (d) {
     const bi = Math.max(0, P.barIdx);
     if (JSON.stringify(d.tuning) !== JSON.stringify(STD)) out.push(`<b>Tuning: ${esc(d.tuning_name)}</b>: tune your guitar to this first.`);
+    const most = tabIncomplete();
+    if (most !== false) out.push(`<b>Unfinished tab:</b> Songsterr only has guitar written for ${most} of ${d.bars.length} bars. Chords still work; for the rest try Options → by ear.`);
     const nextSec = d.bars.slice(bi + 1).findIndex((b) => b.section);
     if (nextSec >= 0 && nextSec < 4) out.push(`<b>${esc(d.bars[bi + 1 + nextSec].section)}</b> ${nextSec === 0 ? "starts next bar" : `in ${nextSec + 1} bars`}.`);
     const soon = d.beats.filter((b) => b[2] >= bi && b[2] <= bi + 2);
