@@ -482,3 +482,28 @@ body.neon button.song span { color: var(--muted); }
 /* Song chords pop-up: rows close together */
 .np-map { gap: 6px; }
 .np-map .sec { padding: 6px 12px; margin: 0; }
+.play-btn { width: 30px; height: 30px; border-radius: 50%; padding: 0; font-size: 12px; display: inline-grid; place-items: center; }
+
+/* lyrics: one lane, easy to read */
+.tlyric { font: 700 17px -apple-system, "SF Pro Rounded", var(--font); fill: #5a5047; letter-spacing: .1px; }
+.tlyric.first { fill: #1c1712; }
+.tlyric.dash { fill: #b4a898; font-weight: 600; letter-spacing: 1px; }
+.tlyric.on { fill: #e8461a; }
+body.neon .tlyric { fill: #a9a7d8; } body.neon .tlyric.first { fill: #f1f0ff; } body.neon .tlyric.dash { fill: #5d5b99; }
+body.neon .tlyric.on { fill: #c9b0ff; }
+body.pl-focus .tlyric { font-size: 24px; }
+
+.board .sname { text-anchor: middle; }
+.board .fx-open rect { fill: #ffd27a; filter: drop-shadow(0 0 8px rgba(255, 210, 122, .9)); }
+.board .fx-open text { fill: #1a1208; font: 900 16px var(--font); text-anchor: middle; }
+body:is(.str-two, .str-each) .board .fx-open rect { fill: var(--sc, #ffd27a); }
+body:is(.str-two, .str-each) .board .fx-open.s0 rect { fill: var(--s0); filter: drop-shadow(0 0 10px var(--s0)); }
+body:is(.str-two, .str-each) .board .fx-open.s1 rect { fill: var(--s1); filter: drop-shadow(0 0 10px var(--s1)); }
+body:is(.str-two, .str-each) .board .fx-open.s2 rect { fill: var(--s2); filter: drop-shadow(0 0 10px var(--s2)); }
+body:is(.str-two, .str-each) .board .fx-open.s3 rect { fill: var(--s3); filter: drop-shadow(0 0 10px var(--s3)); }
+body:is(.str-two, .str-each) .board .fx-open.s4 rect { fill: var(--s4); filter: drop-shadow(0 0 10px var(--s4)); }
+body:is(.str-two, .str-each) .board .fx-open.s5 rect { fill: var(--s5); filter: drop-shadow(0 0 10px var(--s5)); }
+
+/* the hand shape: notes still pressed but not sounding */
+.board .fx-held { fill: rgba(80, 170, 255, .22); stroke: rgba(120, 190, 255, .75); stroke-width: 2; stroke-dasharray: 4 3; }
+.board .fx-barre.idle { opacity: .55; }

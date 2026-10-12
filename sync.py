@@ -55,8 +55,11 @@ def _unit(m):
     return np.divide(m, nrm, out=np.zeros_like(m), where=nrm > 0)
 
 
-def solve(tab, pos_at, seconds=20):
-    """tab: tabs.load() output. pos_at(clock time) -> the player's position then. Returns a dict or None."""
+def solve(tab, pos_at, seconds=20, near=None):
+    """tab: tabs.load() output. pos_at(clock time) -> the player's position then. Returns a dict or None.
+    near: the offset in use now. The search is centred on it (so big drifts are followed), and the best answer close
+    to it is reported too (near_offset / near_score), so the page can stay put when a far answer is only a repeat of
+    the same riff a few bars away."""
     x, t_end, rate = listen.recent(seconds)
     if len(x) < rate * min(3, seconds) or float(np.sqrt(np.mean(x ** 2))) < 0.003:  # a first answer after 3 s, better as it hears more
         return None
@@ -75,10 +78,12 @@ def solve(tab, pos_at, seconds=20):
     loud = np.linalg.norm(chroma, axis=1) > 1e-6
     heard = _unit(chroma)
 
+    centre = round(near, 1) if near is not None else 0.0
+
     def scan(shift):
         prs = _unit(np.roll(pr, shift, axis=1))
         out = []
-        for o in np.arange(-10, 10.001, 0.1):
+        for o in np.arange(centre - 10, centre + 10.001, 0.1):
             k = np.round((bpos + o) / step).astype(int)
             ok = loud & (k >= 0) & (k < len(prs))
             ok[ok] &= prs[k[ok]].sum(axis=1) > 0
@@ -92,6 +97,8 @@ def solve(tab, pos_at, seconds=20):
             sc, o = max(scan(sh))
             if sc > note_score + 0.08:
                 note_score, coarse, shift = sc, o, sh
+    close = [(v, o) for v, o in s0 if near is not None and abs(o - near) <= 0.6]
+    near_score, near_coarse = max(close) if close else (-1, None)
     valid = [v for v, _ in s0 if v >= 0]
     if not valid:
         return None
@@ -121,4 +128,5 @@ def solve(tab, pos_at, seconds=20):
         fine = float(offs[i])
         att_conf = float((res[i] - res.mean()) / (res.std() + 1e-9))  # how far the best stands out (z-score)
     return {"offset": round(fine, 3), "coarse": round(coarse, 2), "shift": shift, "note_score": round(note_score, 3),
+            "near_score": round(near_score, 3), "near_coarse": near_coarse, "centre": centre,
             "note_conf": round(note_conf, 3), "attack_conf": round(att_conf, 2), "heard_s": round(len(x) / rate, 1)}

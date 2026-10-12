@@ -184,11 +184,27 @@ def best_version(title, artist):
     return best
 
 
+PLAYING = {"playing": False, "since": 0.0, "pos": 0.0, "at": 0.0, "title": ""}
+
+
+def note_playback(p):
+    """Remember when playback (re)started or jumped, so syncing only uses sound from after that."""
+    import time as _t
+    now = _t.time()
+    playing, title = bool(p.get("playing")), p.get("title", "")
+    expected = PLAYING["pos"] + (now - PLAYING["at"] if PLAYING["playing"] else 0)
+    jumped = playing and PLAYING["playing"] and abs((p.get("pos") or 0) + (now - (p.get("at") or now)) - expected) > 1.5
+    if playing and (not PLAYING["playing"] or title != PLAYING["title"] or jumped):
+        PLAYING["since"] = now
+    PLAYING.update(playing=playing, title=title, pos=p.get("pos") or 0, at=p.get("at") or now)
+
+
 @app.get("/api/now")
 def now():
     """What's playing in any app + its Songsterr version (the most complete one, if Songsterr has that song).
     ?listen=1 (the Play page, auto-sync on): keep MasterPrac's ears on, so sound is already saved up for syncing."""
     p = h.now_playing()
+    note_playback(p)
     if request.args.get("listen") and p.get("playing"):
         import listen
         if listen._state["proc"] is None:
@@ -219,11 +235,16 @@ def sync_now(song_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 502
     p = h.now_playing()
+    note_playback(p)
     if not p.get("title"):
         return jsonify({"result": None, "why": "nothing playing"})
-    pos_at = lambda c: p["pos"] + ((c - p["at"]) if p["playing"] else 0)
+    if not p["playing"]:
+        return jsonify({"result": None, "why": "paused"})
+    pos_at = lambda c: p["pos"] + (c - p["at"])
+    # only sound heard since playback last (re)started: older sound belongs to other positions
+    seconds = min(request.args.get("seconds", default=20, type=float), time.time() - PLAYING["since"] - 0.3)
     t0 = time.time()
-    r = sync.solve(tab, pos_at, seconds=request.args.get("seconds", default=20, type=float))
+    r = sync.solve(tab, pos_at, seconds=seconds, near=request.args.get("near", type=float)) if seconds >= 3 else None
     print(f"  sync {time.strftime('%H:%M:%S')} heard={listen.recent(20)[0].size / max(1, listen.RATE):.1f}s -> "
           f"{'offset %+.2f conf %.2f' % (r['offset'], r['note_conf']) if r else 'no answer yet'}", flush=True)
     return jsonify({"result": r, "took": round(time.time() - t0, 2), "error": listen.notes().get("error")})
@@ -236,6 +257,16 @@ def lyrics_now():
     if not p.get("title"):
         return jsonify({"lines": []})
     return jsonify({"lines": h.lrclib_lyrics(p["title"], p["artist"], p.get("duration") or 0), "title": p["title"]})
+
+
+@app.post("/api/player/<what>")
+def player(what):
+    """MasterPrac's play / pause button: tells Spotify, so the music and the tab start at the same moment."""
+    if what not in ("play", "pause", "toggle"):
+        return jsonify({"error": "play, pause or toggle"}), 400
+    cmd = {"play": "play", "pause": "pause", "toggle": "playpause"}[what]
+    h._osa(f'tell application "Spotify" to {cmd}')
+    return jsonify(h.now_playing())
 
 
 @app.get("/api/now/versions")
@@ -300,6 +331,7 @@ def watch_now_playing():
         _t.sleep(3)
         try:
             p = h.now_playing()
+            note_playback(p)
             if not p.get("title"):
                 continue
             k = f"{p['title']}|{p['artist']}".lower()

@@ -197,7 +197,7 @@ function fretboard(svg, o) {
   for (let f = 1; f <= FR; f++) g += `<text class="fnum" x="${(fx(f - 1) + fx(f)) / 2}" y="${top - 20}">${f}</text>`;
   tuning.forEach((open, s) => {
     g += `<line class="string s${s}" x1="${left}" y1="${sy(s)}" x2="${W - right}" y2="${sy(s)}" style="stroke-width:${1.6 + s * 0.6}"/>`;
-    g += `<text class="sname" x="10" y="${sy(s) + 5}">${nn(open % 12)}</text>`;
+    g += `<text class="sname" x="20" y="${sy(s) + 5}">${nn(open % 12)}</text>`;
     for (let f = 0; f <= FR; f++) {
       const pc = (open + f) % 12;
       const isChord = chordTones.includes(pc), iv = key ? (pc - key.root + 12) % 12 : null;
@@ -257,12 +257,26 @@ const playerPos = () => {
   return p.pos + (p.playing ? Date.now() / 1000 - p.at : 0);
 };
 // where the tab should be: what you HEAR (speakers play a bit later, e.g. 0.24 s on Bluetooth) + the sync shift
-const playTime = () => playerPos() - ((P.info && P.info.latency) || 0) + P.offset;
+// sync points heard along the song ({pos, off}). With 2+ points far apart the offset follows a straight line:
+// a recording that is a little faster or slower than the tab's drifts, and the line follows that drift.
+function offsetAt(pos) {
+  const pts = SYNC.points || [];
+  if (pts.length < 2) return P.offset;
+  const span = pts[pts.length - 1].pos - pts[0].pos;
+  if (span < 30) return P.offset;
+  const n = pts.length, mx = pts.reduce((a, q) => a + q.pos, 0) / n, my = pts.reduce((a, q) => a + q.off, 0) / n;
+  const sxx = pts.reduce((a, q) => a + (q.pos - mx) ** 2, 0), sxy = pts.reduce((a, q) => a + (q.pos - mx) * (q.off - my), 0);
+  const b = sxx ? sxy / sxx : 0;
+  if (Math.abs(b) > 0.05) return P.offset;  // more than 5% speed difference: not drift, something else
+  return my + b * (pos - mx);
+}
+const playTime = () => { const pos = playerPos() - ((P.info && P.info.latency) || 0); return pos + offsetAt(pos); };
 
 async function pollNow() {
   if (tab !== "play") return;
-  let p;
+  let p;  // eslint-disable-line prefer-const
   try { p = await (await fetch(SYNC.on ? "/api/now?listen=1" : "/api/now")).json(); } catch (e) { return; }
+  if (!p.title && P.info && P.info.title) p = { ...P.info, playing: false, pos: playerPos(), at: Date.now() / 1000 };  // paused: keep everything
   const changed = !P.info || P.info.title !== p.title || P.info.artist !== p.artist;
   P.info = p;
   $("#pl-app").textContent = p.title ? `${p.playing ? "PLAYING" : "PAUSED"} IN ${(p.app || "AN APP").toUpperCase()}` : "NOTHING PLAYING";
@@ -294,7 +308,7 @@ async function loadTab(id, track) {
   catch (e) { d = { error: "Couldn't reach Songsterr." }; }
   if (P.songId !== id) return;  // the song changed meanwhile
   P.tab = d; P.track = d.lead; P.sig = ""; P.barIdx = -1; P.beatIdx = -1;
-  SYNC.recent = []; SYNC.shifts = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
+  SYNC.recent = []; SYNC.shifts = []; SYNC.points = []; SYNC.state = ""; SYNC.shift = 0; SYNC.keyNote = "";
   if (d.error) { tabEmpty(esc(d.error) + " Chords by ear instead."); return; }
   P.key = { root: d.key.root, minor: d.key.minor };
   $("#tab-part").innerHTML = d.tracks.map((t) => `<option value="${t.i}" ${t.i === d.lead ? "selected" : ""}>${esc(partName(t))}${t.played != null ? ` (plays ${t.played} of ${d.bars.length} bars)` : ""}</option>`).join("");
@@ -402,16 +416,31 @@ function drawTab() {
     h += s + "</g>";
   });
   // the sung words, each syllable where it's sung (a new line starts with a capital-looking gap)
-  const lyEnd = [-1e9, -1e9];  // where the last word on each of the 2 lyric lines ends (no overlapping words)
-  (TSHOW.lyrics ? d.lyrics || [] : []).forEach(([t, syl, nl], i) => {
-    const x = t * PX + 6, w = (syl.length * 9.5 + 6) * Z, row = x >= lyEnd[0] ? 0 : x >= lyEnd[1] ? 1 : 0;
-    lyEnd[row] = x + w;
-    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x}" y="${yEnd + 40 * Z + row * 19 * Z}">${esc(syl)}</text>`;
+  // lyrics: ONE lane. A syllable sits where it's sung; if the one before still takes that space it flows a little to the
+  // right and catches up. A syllable held long gets dashes up to the next one, so you see it's being sung long.
+  const ly = TSHOW.lyrics ? d.lyrics || [] : [], fs = 17 * Z, cw = fs * 0.56, ly0 = yEnd + 40 * Z;
+  let lyEnd = -1e9;
+  ly.forEach(([t, syl, nl], i) => {
+    const want = t * PX + 6, x = Math.max(want, lyEnd + (nl ? cw * 1.6 : cw * 0.5)), w = syl.length * cw;
+    h += `<text class="tlyric ${nl ? "first" : ""}" id="ly${i}" x="${x}" y="${ly0}">${esc(syl.replace(/-$/, ""))}</text>`;
+    lyEnd = x + w;
+    const next = ly[i + 1], nx = next ? next[0] * PX + 6 : null;
+    const held = next && !next[2] ? nx - lyEnd : 0;  // space until the next syllable of the same line
+    if (held > cw * 4) {  // long: dashes to the next syllable
+      const n = Math.min(12, Math.floor(held / (cw * 2.2)));
+      h += `<text class="tlyric dash" x="${lyEnd + cw * 0.6}" y="${ly0}">${Array(n).fill("-").join(" ")}</text>`;
+      lyEnd += n * cw * 2;
+    } else if (syl.endsWith("-")) {
+      h += `<text class="tlyric dash" x="${lyEnd + 2}" y="${ly0}">-</text>`; lyEnd += cw;
+    }
   });
   // timed lines from LRCLIB: their times are the recording's, so they sit at recording time + the sync shift
   P.lrcDrawnAt = P.offset;
+  let lrEnd = -1e9;
   (TSHOW.lyrics && !(d.lyrics && d.lyrics.length) ? P.lrc || [] : []).forEach(([t, line], i) => {
-    h += `<text class="tlyric first" id="lr${i}" x="${(t + P.offset) * PX + 6}" y="${yEnd + 40 * Z}">${esc(line)}</text>`;
+    const x = Math.max((t + P.offset) * PX + 6, lrEnd + cw * 3);
+    h += `<text class="tlyric first" id="lr${i}" x="${x}" y="${ly0}">${esc(line)}</text>`;
+    lrEnd = x + line.length * cw;
   });
   g.innerHTML = h;
   // string names stay put on the left while the tab slides under them
@@ -439,7 +468,7 @@ function playTick() {
   }
   if (!usingTab()) return;
   const d = P.tab;
-  $("#tab-g").setAttribute("transform", `translate(${(P.headX || 200) - t * (P.PXdraw || P.PX) - 6},0)`);
+
   const last = d.bars[d.bars.length - 1];
   if (t > last.end + 3) {  // past the end of the tab: a longer version, or not this song
     if (P.sig !== "end") {
@@ -645,7 +674,9 @@ async function syncListen() {
   SYNC.lastAsk = performance.now();
   SYNC.busy = true;
   let d;
-  try { d = await (await fetch(`/api/sync/${P.tab.song_id}`)).json(); } catch (e) { SYNC.busy = false; return; }
+  const nowOff = offsetAt(playerPos());
+  const q = SYNC.state === "locked" ? `?near=${nowOff.toFixed(2)}` : "";
+  try { d = await (await fetch(`/api/sync/${P.tab.song_id}${q}`)).json(); } catch (e) { SYNC.busy = false; return; }
   SYNC.busy = false;
   if (d.error && d.error !== P.earError) { P.earError = d.error; headsUp(esc(d.error)); }
   const r = d.result;
@@ -663,16 +694,29 @@ async function syncListen() {
     headsUp();
   }
   if (r.shift !== (SYNC.shift || 0)) return;  // an answer for another key than the one we're in: not a timing
-  const raw = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  let raw = r.attack_conf >= 1.8 ? r.offset : r.coarse;  // precise attacks when they stand out, else the note match
+  // a far answer that is only a little better than the timing we're at = the same riff a few bars away: stay
+  if (SYNC.state === "locked" && Math.abs(raw - nowOff) > 1.5 && r.near_coarse != null && r.near_score >= r.note_score - 0.04) {
+    raw = Math.abs(r.offset - r.near_coarse) < 0.3 ? r.offset : r.near_coarse;
+  }
   // the middle of the last 3 answers: one odd reading is ignored, a real change wins after 2 checks
   SYNC.recent = [...(SYNC.recent || []), raw].slice(-3);
   const sorted = [...SYNC.recent].sort((a, b) => a - b), target = sorted[Math.floor(sorted.length / 2)];
+  // a sync point at this place in the song (for following drift); points that disagree a lot with the line are dropped
+  const here = playerPos();
+  SYNC.points = [...(SYNC.points || []).filter((p) => Math.abs(p.pos - here) > 4), { pos: here, off: target }]
+    .sort((a, b) => a.pos - b.pos).slice(-24);
+  if (SYNC.points.length >= 4) {
+    const fit = SYNC.points.map((p) => ({ ...p, err: Math.abs(p.off - offsetAt(p.pos)) }));
+    SYNC.points = fit.filter((p) => p.err < 0.6).map(({ pos, off }) => ({ pos, off }));
+  }
   if (Math.abs(target - P.offset) >= 0.03) {  // small wobbles are ignored, real changes are followed
     P.offset = Math.round(target * 100) / 100; showOffset(); P.sig = "";
     if (P.songId) localStorage.setItem("pl-offset-" + P.songId, P.offset);
   }
   SYNC.state = "locked";
-  syncStatus(`In sync ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s`, true);
+  const dr = (SYNC.points || []).length >= 2 && SYNC.points[SYNC.points.length - 1].pos - SYNC.points[0].pos >= 30;
+  syncStatus(`In sync ${P.offset >= 0 ? "+" : ""}${P.offset.toFixed(2)} s${dr ? " · following speed" : ""}`, true);
 }
 setInterval(syncListen, 1000);
 function syncStatus(text, ok) {
@@ -722,6 +766,7 @@ document.addEventListener("click", (e) => {
   if (b.id === "pl-chords") { buildMap(); P.barIdx = -1; openPop("#pop-chords"); }
   if (b.dataset.nudge && P.songId) {
     if (SYNC.on) { SYNC.on = false; $("#o-autosync").checked = false; syncStatus(""); toast("Auto-sync off: you're setting the timing"); }
+    SYNC.points = [];
     P.offset = Math.round((P.offset + Number(b.dataset.nudge)) * 100) / 100;
     localStorage.setItem("pl-offset-" + P.songId, P.offset); showOffset();
   }
@@ -930,6 +975,15 @@ function fxBeat(d, bt, bnow) {
   if (!bnow) { FX.notes = []; return; }
   const [t0, dur] = bnow, after = d.beats.slice(bt + 1).find((b) => b[3].length);
   const before = FX.notes || [];
+  // the hand shape: notes played in the same position stay "held" until the hand moves (a note on the same string at
+  // another fret, or a fret out of the hand's reach, or a long gap)
+  const fretted = bnow[3].filter((n) => !n[2].includes("t") && !n[2].includes("x"));
+  const shape = FX.shape || new Map(), lo = Math.min(...[...shape.values()].filter((f) => f > 0), 99);
+  const moved = fretted.some(([st, f]) => (shape.has(st) && shape.get(st) !== f) || (f > 0 && lo < 99 && Math.abs(f - lo) > 4))
+    || bnow[0] - (FX.shapeAt || 0) > 2.5;
+  if (moved) shape.clear();
+  for (const [st, f] of fretted) shape.set(st, f);
+  FX.shape = shape; FX.shapeAt = bnow[0] + bnow[1];
   // let ring: the notes that were ringing keep a fading halo for a moment
   const nowMs = performance.now();
   FX.ringing = [...(FX.ringing || []).filter((r) => nowMs - r.at < 1600),
@@ -983,40 +1037,36 @@ function fxDraw() {
   if (!geo || !layer) return;
   const t = playTime(), now = performance.now();
   let h = "";
-  // barres. Main one: the lowest fretted fret with 2+ notes = the index finger lying across every string between them,
-  // even where other fingers press higher (there the bar is see-through, with a hollow ring and a dotted line to the
-  // fret that actually sounds). Other frets: a smaller bar when one finger flattens over 2+ neighbouring strings.
-  const held = FX.notes.filter((n) => n.f > 0 && n.s < geo.strings && !/[siIoOxh]/.test(n.fl));
-  const frets = [...new Set(held.map((n) => n.f))].sort((a, b) => a - b);
-  const barre = (f, from, to, main, covered) => {
-    const notesAt = FX.notes.filter((n) => n.f === f && n.s >= from && n.s <= to);
-    const age = notesAt.length ? (now - Math.min(...notesAt.map((n) => n.pickedAt))) / 1000 : 1;
-    const press = Math.min(1, 0.85 + age * 1.5), x = fretX(geo, f), w = (geo.r * 2 + 10) * press;
-    const y1 = geo.sy(from) - geo.r - 4, y2 = geo.sy(to) + geo.r + 4;
-    h += `<rect class="fx-barre ${main ? "main" : ""}" x="${x - w / 2}" y="${y1}" width="${w}" height="${y2 - y1}" rx="${w / 2}"/>`;
-    for (const c of covered) {  // under the barre, but another finger sounds a higher fret on this string
-      const y = geo.sy(c.s), xh = fretX(geo, c.f);
-      h += `<rect class="fx-barre-under" x="${x - w / 2 + 2}" y="${y - geo.r - 2}" width="${w - 4}" height="${geo.r * 2 + 4}" rx="${(w - 4) / 2}"/>`;
-      h += `<circle class="fx-barre-ring" cx="${x}" cy="${y}" r="${geo.r * 0.55}"/>`;
-      h += `<line class="fx-barre-link" x1="${x + geo.r * 0.6}" y1="${y}" x2="${xh - geo.r - 6}" y2="${y}"/>`;
+  // hand shape: notes still held (pressed but not sounding right now) are see-through blue
+  const shape = FX.shape || new Map(), sounding = new Set(FX.notes.map((n) => `${n.s}:${n.f}`));
+  for (const [st, f] of shape) {
+    if (f > 0 && st < geo.strings && !sounding.has(`${st}:${f}`)) {
+      h += `<circle class="fx-held" cx="${fretX(geo, f)}" cy="${geo.sy(st)}" r="${geo.r + 3}"/>`;
     }
-    if (main && to - from >= 2) h += `<text class="fx-barre-label" x="${x}" y="${y1 - 7}">barre ${f}</text>`;
-  };
-  if (frets.length) {
-    const f0 = frets[0], at0 = held.filter((n) => n.f === f0).map((n) => n.s);
-    if (at0.length >= 2) {
-      const from = Math.min(...at0), to = Math.max(...at0);
-      const covered = held.filter((n) => n.f > f0 && n.s > from && n.s < to);
-      barre(f0, from, to, true, covered);
-    }
-    for (const f of frets.slice(1)) {  // smaller barres: one finger flat over neighbouring strings
-      const ss = held.filter((n) => n.f === f).map((n) => n.s).sort((a, b) => a - b);
-      let run = [ss[0]];
-      for (const sN of [...ss.slice(1), null]) {
-        if (sN !== null && sN === run[run.length - 1] + 1) { run.push(sN); continue; }
-        if (run.length >= 2) barre(f, run[0], run[run.length - 1], false, []);
-        run = [sN];
+  }
+  // barre: worked out from the whole shape, like a guitarist would
+  const sh = [...shape.entries()].filter(([st]) => st < geo.strings);
+  const frettedS = sh.filter(([, f]) => f > 0);
+  if (frettedS.length >= 2) {
+    const f0 = Math.min(...frettedS.map(([, f]) => f));
+    const atF0 = frettedS.filter(([, f]) => f === f0).map(([st]) => st), from = Math.min(...atF0), to = Math.max(...atF0);
+    const openBetween = sh.some(([st, f]) => f === 0 && st > from && st < to);   // an open string inside = no barre
+    const above = frettedS.filter(([, f]) => f > f0).length;                     // notes the other 3 fingers must play
+    const adjacentOnly = to - from === 1 && atF0.length === 2;
+    const isBarre = atF0.length >= 2 && !openBetween && above <= 3 && (!adjacentOnly || frettedS.length >= 5);
+    if (isBarre) {
+      const x = fretX(geo, f0), w = geo.r * 2 + 10, y1 = geo.sy(from) - geo.r - 4, y2 = geo.sy(to) + geo.r + 4;
+      const live = FX.notes.some((n) => n.f === f0 && n.s >= from && n.s <= to);
+      h += `<rect class="fx-barre main ${live ? "" : "idle"}" x="${x - w / 2}" y="${y1}" width="${w}" height="${y2 - y1}" rx="${w / 2}"/>`;
+      for (const [st, f] of frettedS) {  // strings under the barre where another finger sounds a higher fret
+        if (st > from && st < to && f > f0) {
+          const y = geo.sy(st);
+          h += `<rect class="fx-barre-under" x="${x - w / 2 + 2}" y="${y - geo.r - 2}" width="${w - 4}" height="${geo.r * 2 + 4}" rx="${(w - 4) / 2}"/>`;
+          h += `<circle class="fx-barre-ring" cx="${x}" cy="${y}" r="${geo.r * 0.55}"/>`;
+          h += `<line class="fx-barre-link" x1="${x + geo.r * 0.6}" y1="${y}" x2="${fretX(geo, f) - geo.r - 6}" y2="${y}"/>`;
+        }
       }
+      if (to - from >= 2) h += `<text class="fx-barre-label" x="${x}" y="${y1 - 7}">barre ${f0}</text>`;
     }
   }
   // let ring: earlier notes still ringing (fading halos)
@@ -1053,8 +1103,8 @@ function fxDraw() {
       const a = Math.max(0, 1 - Math.max(0, (t - n.t0) / Math.max(0.25, n.dur)));
       h += `<line class="fx-string s${n.s}" x1="${geo.left}" y1="${q.y}" x2="${geo.x2}" y2="${q.y}" opacity="${(0.35 + 0.65 * a).toFixed(2)}"/>`;
     }
-    const since = (now - n.pickedAt) / 1000, col = getComputedStyle(document.body).getPropertyValue(`--s${n.s}`).trim() || "#ffd27a";
-    if (since < 0.3 && !n.fl.includes("x")) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
+    const since = (now - n.pickedAt) / 1000, col = strColor(n.s);
+    if (since < 0.3 && !n.fl.includes("x") && q.fret > 0) {  // just picked: the string shimmers (a fading wave) and a ring pulses out
       const amp = (n.again ? 4.5 : 3) * (1 - since / 0.3), y0 = geo.sy(n.s);
       let path = `M${geo.left} ${y0}`;
       for (let x = geo.left; x <= geo.x2; x += 8) path += ` L${x} ${(y0 + Math.sin((x - geo.left) / 11 + since * 90) * amp).toFixed(1)}`;
@@ -1062,7 +1112,13 @@ function fxDraw() {
       const rg = (geo.r + 5) * (1 + since * (n.again || n.fl.includes("a") ? 4 : 2.5));
       h += `<circle class="fx-ring" style="stroke:${col}" cx="${q.x}" cy="${q.y}" r="${rg.toFixed(1)}" opacity="${((n.again ? 0.95 : 0.6) * (1 - since / 0.3)).toFixed(2)}"/>`;
     }
-    let rr = q.fret === 0 ? geo.r : geo.r + 5;  // smaller by the nut, so it never covers the string names
+    if (q.fret === 0 && !/[siIoOh]/.test(n.fl)) {  // open string: no bubble, the string's name lights up instead
+      const lit = 1 - Math.min(1, Math.max(0, (t - n.t0) / Math.max(0.3, n.dur)));
+      h += `<g class="fx-open s${n.s}" opacity="${(0.55 + 0.45 * lit).toFixed(2)}"><rect x="2" y="${q.y - 14}" width="36" height="28" rx="9"/>
+        <text x="20" y="${q.y + 6}">${esc(nn(P.tab.tuning[n.s] % 12))}</text></g>`;
+      continue;
+    }
+    let rr = geo.r + 5;
     if ((n.bf || "").includes("tr")) rr *= 1 + 0.12 * Math.sin(now / 1000 * 2 * Math.PI * 14);  // tremolo picking: fast flicker
     if ((n.bf || "").includes("pm")) rr *= 0.85;                                                   // palm muted: smaller, dull
     const op = q.fade * (n.fl.includes("g") ? 0.5 : 1);
@@ -1132,7 +1188,7 @@ $("#highway").classList.remove("hidden");
 setTView(TVIEW);
 
 // lane colours = the string colours (Options); with colours off, every lane is violet
-const laneColor = (s) => getComputedStyle(document.body).getPropertyValue(`--s${s}`).trim() || "#9b5cff";
+const laneColor = (s) => (typeof strColor === "function" && strColor(s) !== "#ffd27a" ? strColor(s) : "#9b5cff");
 const AHEAD = 2.6;  // seconds of song visible on the highway
 function hwDraw() {
   if (tab !== "play" || TVIEW !== "highway" || !usingTab()) return;
@@ -1244,3 +1300,35 @@ document.addEventListener("click", (e) => {
 document.querySelectorAll("details.dd").forEach((d) => d.addEventListener("toggle", () => {
   if (d.open) document.querySelectorAll("details.dd[open]").forEach((o) => { if (o !== d) o.removeAttribute("open"); });
 }));
+
+/* play / pause: MasterPrac and Spotify start together */
+$("#pl-playbtn").addEventListener("click", async () => {
+  const b = $("#pl-playbtn"); b.disabled = true;
+  try {
+    const p = await (await fetch("/api/player/toggle", { method: "POST" })).json();
+    if (P.info && p.title === P.info.title) { P.info = { ...P.info, ...p }; }
+  } catch (e) { toast("Couldn't reach Spotify"); }
+  b.disabled = false; pollNow();
+});
+setInterval(() => { const b = $("#pl-playbtn"); if (b) b.innerHTML = P.info && P.info.playing ? "&#10074;&#10074;" : "&#9654;"; }, 300);
+
+/* smooth tab: the strip slides every screen refresh (60 fps), moved by the GPU; the rest updates 20x a second */
+const tabG = $("#tab-g");
+tabG.style.willChange = "transform";
+function tabScroll() {
+  requestAnimationFrame(tabScroll);
+  if (tab !== "play" || TVIEW !== "tab" || !usingTab()) return;
+  const x = (P.headX || 200) - playTime() * (P.PXdraw || P.PX) - 6;
+  tabG.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
+}
+requestAnimationFrame(tabScroll);
+// string colours, looked up once (not 6x per frame)
+const COLOR = { at: 0, v: [] };
+function strColor(s) {
+  if (performance.now() - COLOR.at > 1000) {
+    const cs = getComputedStyle(document.body);
+    COLOR.v = [0, 1, 2, 3, 4, 5].map((i) => cs.getPropertyValue(`--s${i}`).trim());
+    COLOR.at = performance.now();
+  }
+  return COLOR.v[s] || "#ffd27a";
+}
