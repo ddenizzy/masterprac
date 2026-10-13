@@ -238,7 +238,14 @@ function fretboard(svg, o) {
   }
   if (o.animate) {  // the animator draws the playing notes (moving bubbles + trails) into this layer
     svg._geo = { xAt, sy, strings, r, left, x2: W - right, gap: (H - top - bottom) / (strings - 1) };
-    svg.innerHTML = g + `<g id="fx-trail"></g><g id="fx-now"></g>`;
+    // the bubble layers stay put (rebuilding them on every note blanked the bubbles until the next frame = flicker);
+    // the board under them is only replaced when it really changed
+    let base = svg.querySelector("#fb-base");
+    if (!base || !svg.querySelector("#fx-now")) {
+      svg.innerHTML = `<g id="fb-base"></g><g id="fx-trail"></g><g id="fx-now"></g>`;
+      base = svg.querySelector("#fb-base"); svg._html = null;
+    }
+    if (svg._base !== g) { base.innerHTML = g; svg._base = g; }
     return;
   }
   for (const [s, f, fl = ""] of o.now || []) {
@@ -246,7 +253,7 @@ function fretboard(svg, o) {
     const badge = fl.includes("x") ? "x" : fl.includes("H") ? "harm" : fl.includes("v") ? "~" : fl.includes("h") ? "h" : "";
     if (badge && s < strings) g += `<g class="tech-badge"><rect x="${xAt(f) + r - 2}" y="${sy(s) - r - 14}" width="${badge.length * 8 + 10}" height="16" rx="8"/><text x="${xAt(f) + r + 3 + badge.length * 4}" y="${sy(s) - r - 2}">${badge}</text></g>`;
   }
-  svg.innerHTML = g;
+  if (svg._html !== g) { svg.innerHTML = g; svg._html = g; svg._base = null; }  // unchanged = leave it alone
 }
 
 /* ======================= PLAY (any app's song: scrolling tab, chords, fretboard) ======================= */
@@ -766,6 +773,7 @@ function drawPlayBoard() {
     dim: notesShown() && (sh.scale || sh.chord),  // the guitarist's notes stand out over faded safe notes
     frets: notesShown() && usingTab() ? Math.min(22, Math.max(15, ...P.tab.events.flatMap((e) => e[2].map((x) => x[1] + 1)))) : 15,
     now: sh.now ? P.nowNotes : [], next: sh.next ? P.nextNotes : [], ahead: P.nextNotes, animate: sh.now && usingTab() });
+  if (sh.now && usingTab()) fxDraw();  // bubbles drawn in the same step as the board: never a frame without them
   if (P.mode === "learn") foot();
 }
 showChips();
