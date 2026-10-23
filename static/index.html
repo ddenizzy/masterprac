@@ -56,13 +56,20 @@
 
     <div class="practice-bar hidden" id="practice-bar">
       <span class="kicker">PLAY HERE</span>
-      <div class="seg"><button class="seg-b on" data-pkind="song">Original song</button><button class="seg-b" data-pkind="backing" id="pk-backing">Backing track (no guitar)</button></div>
+      <div class="seg"><button class="seg-b on" data-pkind="song" id="pk-song">Original song</button><button class="seg-b" data-pkind="backing" id="pk-backing">Backing track (no guitar)</button><button class="seg-b" data-pkind="tab" title="MasterPrac plays the notes of the tab itself: works for every tab, even with no recording">Tab sound</button></div>
       <div class="seg"><button class="seg-b" data-speed="0.25">25%</button><button class="seg-b" data-speed="0.5">50%</button><button class="seg-b" data-speed="0.75">75%</button><button class="seg-b on" data-speed="1">100%</button></div>
       <span class="sub" id="practice-note">Exactly in sync: the tab follows the video's own clock.</span>
       <button class="ghost" id="practice-lesson" title="Video lessons for this song (opens in the Songsterr window's browser)">Watch a lesson</button>
       <button class="ghost" id="practice-other">Change song</button>
       <button class="ghost" id="practice-exit">Back to Spotify</button>
       <div class="pr-secs" id="pr-secs"></div>
+      <div class="pr-tools"><span class="kicker">LOOP ANY BARS</span>
+        <button class="chip-t" id="pr-a" title="Marks the bar you are in as the start of the loop">Loop start</button>
+        <button class="chip-t" id="pr-b" title="Marks the bar you are in as the end, then loops">Loop end</button>
+        <button class="ghost" id="pr-clear">Clear</button><span class="sub" id="pr-range"></span>
+        <span class="pr-gap"></span>
+        <button class="chip-t" id="pr-trainer" title="Each time a loop comes round it gets a bit faster, up to 100%">Speed trainer</button>
+        <button class="chip-t" id="pr-countin" title="Four clicks before the song starts, so you are ready">Count-in</button></div>
       <div class="yt-box" id="yt-box"><div id="yt"></div></div>
     </div>
     <div class="pl-now">

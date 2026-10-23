@@ -1739,13 +1739,17 @@ async function startPractice(id, title, artist) {
   document.body.classList.add("practice"); $("#practice-bar").classList.remove("hidden"); setModeSeg("play");
   await loadTab(id, null);
   const d = P.tab;
-  if (!d || d.error || !(d.videos || []).length) { toast("This tab has no recording to practise with"); stopPractice(); return; }
-  $("#pk-backing").classList.toggle("hidden", !d.videos.some((v) => v.kind === "backing"));
+  if (!d || d.error || !(d.beats || []).length) { toast("This song has no tab to practise with"); stopPractice(); return; }
+  if (!(d.videos || []).length) { PR.kind = "tab"; toast("No recording for this tab: MasterPrac plays the tab's notes itself"); }
+  $("#pk-song").classList.toggle("hidden", !(d.videos || []).some((v) => v.kind === "song"));
+  $("#pk-backing").classList.toggle("hidden", !(d.videos || []).some((v) => v.kind === "backing"));
   fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`).then((r) => r.json())
     .then((l) => { if (PR.on && P.songId === id && !(d.lyrics && d.lyrics.length) && l.lines) { P.lrc = l.lines; P.lrcSyl = l.syl || []; drawTab(); } }).catch(() => {});
   playVideo(PR.kind);
 }
 async function playVideo(kind, skip = 0) {
+  if (kind === "tab") { playTabSound(); return; }
+  $("#practice-note").textContent = "Exactly in sync: the tab follows the video's own clock.";
   const d = P.tab, list = d.videos.filter((v) => v.kind === kind);
   const v = list[skip] || d.videos.filter((x) => x.kind === "song")[0];
   if (!v) return;
@@ -1764,7 +1768,7 @@ async function playVideo(kind, skip = 0) {
     } });
 }
 function stopPractice() {
-  PR.on = false; PR.ready = false; SYNC.on = $("#o-autosync").checked;
+  PR.on = false; PR.ready = false; PR.range = null; PR.loop = null; SYNC.on = $("#o-autosync").checked;
   if (PR.yt) { PR.yt.destroy(); PR.yt = null; }
   document.body.classList.remove("practice"); $("#practice-bar").classList.add("hidden"); setModeSeg("follow");
   P.info = null; P.songId = null; pollNow();
@@ -1790,15 +1794,16 @@ document.addEventListener("click", (e) => {
   if (b.id === "practice-exit") stopPractice();
   if (b.dataset.pkind && PR.on) playVideo(b.dataset.pkind);
   if (b.dataset.speed && PR.on) {
-    PR.speed = Number(b.dataset.speed); if (PR.yt && PR.ready) PR.yt.setPlaybackRate(PR.speed);
-    document.querySelectorAll("[data-speed]").forEach((x) => x.classList.toggle("on", x === b));
+    setSpeed(Number(b.dataset.speed));
   }
 }, true);
 // the play button controls the video in practice mode (instead of Spotify)
 $("#pl-playbtn").addEventListener("click", (e) => {
   if (!PR.on || !PR.yt || !PR.ready) return;
   e.stopImmediatePropagation();
-  if (PR.yt.getPlayerState() === 1) PR.yt.pauseVideo(); else PR.yt.playVideo();
+  if (PR.yt.getPlayerState() === 1) PR.yt.pauseVideo();
+  else if ($("#pr-countin").classList.contains("on") && P.tab && !P.tab.error) countIn(() => PR.yt && PR.yt.playVideo());
+  else PR.yt.playVideo();
 }, true);
 // the time bar in practice mode
 setInterval(() => {
@@ -1862,13 +1867,126 @@ document.addEventListener("click", (e) => {
   const k = Number(b.dataset.loop);
   PR.loop = PR.loop === k ? null : k;
   document.querySelectorAll("[data-loop]").forEach((x) => x.classList.toggle("on", Number(x.dataset.loop) === PR.loop));
-  if (PR.loop != null) { PR.yt.seekTo(tabToVideo(PR.secs[k].from), true); PR.yt.playVideo(); toast(`Looping ${PR.secs[k].name}. Click it again to stop`); }
+  if (PR.loop != null) { PR.range = null; showRange(); PR.yt.seekTo(tabToVideo(PR.secs[k].from), true); PR.yt.playVideo(); toast(`Looping ${PR.secs[k].name}. Click it again to stop`); }
 });
-setInterval(() => {  // the loop: back to the start of the part when it ends
-  if (!PR.on || !PR.ready || PR.loop == null) return;
-  const s = PR.secs[PR.loop];
-  if (playTime() >= s.to - 0.05) PR.yt.seekTo(tabToVideo(s.from), true);
+setInterval(() => {  // the loop: back to the start of the part (or of your own bars) when it ends
+  if (!PR.on || !PR.ready) return;
+  const s = PR.range && PR.range.to != null ? PR.range : PR.loop != null ? PR.secs[PR.loop] : null;
+  if (!s || playTime() < s.to - 0.05) return;
+  PR.yt.seekTo(tabToVideo(s.from), true);
+  if ($("#pr-trainer").classList.contains("on")) speedUp();
 }, 60);
+
+/* ---------- Songsterr-style practice tools: loop any bars, speed trainer, count-in, tab sound ---------- */
+let actx = null;
+const audio = () => { actx = actx || new AudioContext(); if (actx.state === "suspended") actx.resume(); return actx; };
+const barAt = (t) => Math.max(0, lastAt(P.tab.bars, t, (b) => b.t));
+
+// loop any bars: "Loop start" marks the bar you're in, "Loop end" the last bar of the loop
+function showRange() {
+  const r = PR.range, bars = P.tab ? P.tab.bars : [];
+  const no = (t) => barAt(t) + 1;
+  $("#pr-a").classList.toggle("on", !!r); $("#pr-b").classList.toggle("on", !!(r && r.to != null));
+  $("#pr-range").textContent = !r ? "" : r.to == null ? `from bar ${no(r.from)}...` : `bars ${no(r.from)}–${no(r.to - 0.01)} of ${bars.length}`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("#pr-a, #pr-b, #pr-clear, #pr-trainer, #pr-countin");
+  if (!b || !PR.on || !P.tab || P.tab.error) return;
+  const bars = P.tab.bars, i = barAt(playTime());
+  if (b.id === "pr-a") { PR.range = { from: bars[i].t, to: null }; PR.loop = null; document.querySelectorAll("[data-loop]").forEach((x) => x.classList.remove("on")); }
+  if (b.id === "pr-b") {
+    if (!PR.range) PR.range = { from: bars[i].t, to: null };
+    PR.range.to = bars[Math.max(i, barAt(PR.range.from))].end;
+    PR.yt.seekTo(tabToVideo(PR.range.from), true); PR.yt.playVideo();
+    toast("Looping your bars. Clear stops it");
+  }
+  if (b.id === "pr-clear") PR.range = null;
+  if (b.id === "pr-trainer" || b.id === "pr-countin") {
+    b.classList.toggle("on");
+    try { localStorage.setItem(b.id, b.classList.contains("on") ? "1" : ""); } catch (er) { /* fine */ }
+    if (b.id === "pr-trainer" && b.classList.contains("on")) toast("Each time the loop comes round, a bit faster, up to 100%");
+  }
+  showRange();
+});
+["pr-trainer", "pr-countin"].forEach((id) => { try { if (localStorage.getItem(id)) $(`#${id}`).classList.add("on"); } catch (e) { /* fine */ } });
+
+// speed trainer: one step faster each time round, up to 100%
+function setSpeed(r) {
+  PR.speed = r; if (PR.yt && PR.ready) PR.yt.setPlaybackRate(r);
+  document.querySelectorAll("[data-speed]").forEach((x) => x.classList.toggle("on", Math.abs(Number(x.dataset.speed) - r) < 0.001));
+}
+function speedUp() {
+  const cur = PR.speed || 1;
+  if (cur >= 1) return;
+  const rates = (PR.yt.getAvailablePlaybackRates ? PR.yt.getAvailablePlaybackRates() : [0.25, 0.5, 0.75, 1]).filter((x) => x > cur + 0.001 && x <= 1);
+  const next = rates.length ? Math.min(...rates) : 1;
+  setSpeed(next); toast(`Faster: ${Math.round(next * 100)}%`);
+}
+
+// count-in: four clicks at the song's tempo (and the chosen speed) before it plays
+function countIn(then) {
+  const d = P.tab, bar = d.bars[barAt(playTime())];
+  const beat = (d.tempo ? 60 / d.tempo : Math.max(0.25, (bar.end - bar.t) / 4)) / (PR.speed || 1);
+  const ac = audio(), t0 = ac.currentTime + 0.05;
+  for (let k = 0; k < 4; k++) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = k === 0 ? 1500 : 1000; o.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(0.0001, t0 + k * beat); g.gain.exponentialRampToValueAtTime(0.3, t0 + k * beat + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + k * beat + 0.08);
+    o.start(t0 + k * beat); o.stop(t0 + k * beat + 0.1);
+  }
+  setTimeout(then, (0.05 + 4 * beat) * 1000);
+}
+
+// tab sound: MasterPrac plays the tab's own notes. It acts like the YouTube player (same calls), so play/pause,
+// speed, loops and the time bar all work the same; its clock is the tab's time, so it is always in sync.
+function TabSynth(d) {
+  const ac = audio(), out = ac.createGain(); out.gain.value = 0.5; out.connect(ac.destination);
+  const dur = d.bars.length ? d.bars[d.bars.length - 1].end : 0;
+  let playing = false, pos = 0, at = 0, rate = 1, next = 0, timer = null;
+  const now = () => (playing ? pos + (ac.currentTime - at) * rate : pos);
+  const from = (t) => { next = 0; while (next < d.beats.length && d.beats[next][0] < t - 0.001) next++; };
+  function pluck(midi, when, len, muted) {
+    const f = 440 * 2 ** ((midi - 69) / 12), o = ac.createOscillator(), o2 = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = "triangle"; o2.type = "sawtooth"; o.frequency.value = f; o2.frequency.value = f;
+    const g2 = ac.createGain(); g2.gain.value = 0.25; o2.connect(g2); g2.connect(lp); o.connect(lp);
+    lp.type = "lowpass"; lp.frequency.setValueAtTime(Math.min(6000, f * 8), when); lp.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.5), when + 0.4);
+    const ring = muted ? 0.06 : Math.min(2, Math.max(0.25, len)) + 0.2, peak = muted ? 0.12 : 0.25;
+    g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(peak, when + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, when + ring);
+    lp.connect(g); g.connect(out); o.start(when); o2.start(when); o.stop(when + ring + 0.05); o2.stop(when + ring + 0.05);
+  }
+  function tick() {  // schedule the notes of the next ~0.25 s of tab time
+    if (!playing) return;
+    const t = now(), until = t + 0.25 * rate;
+    while (next < d.beats.length && d.beats[next][0] < until) {
+      const [bt, bl, , notes] = d.beats[next++];
+      if (bt < t - 0.05) continue;
+      const when = ac.currentTime + (bt - t) / rate;
+      for (const [s, fr, fl] of notes) if (!fl.includes("t") && d.tuning[s] != null) pluck(d.tuning[s] + fr, when, bl / rate, fl.includes("x"));
+    }
+    if (t >= dur) { pos = dur; playing = false; }
+  }
+  return {
+    getCurrentTime: now, getDuration: () => dur, getPlayerState: () => (playing ? 1 : 2),
+    playVideo() { if (playing) return; audio(); if (pos >= dur) pos = 0; at = ac.currentTime; playing = true; from(pos); tick(); if (P.info) P.info.playing = true; },
+    pauseVideo() { pos = now(); playing = false; out.gain.setTargetAtTime(0, ac.currentTime, 0.02); setTimeout(() => { out.gain.value = 0.5; }, 120); if (P.info) P.info.playing = false; },
+    seekTo(t) { pos = Math.max(0, Math.min(dur, t)); at = ac.currentTime; from(pos); },
+    setPlaybackRate(r) { pos = now(); at = ac.currentTime; rate = r; },
+    getAvailablePlaybackRates: () => [0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    mute() { out.gain.value = 0; }, init() { timer = setInterval(tick, 30); },
+    destroy() { playing = false; clearInterval(timer); out.disconnect(); },
+  };
+}
+function playTabSound() {
+  const at = PR.yt && PR.ready ? playTime() : 0;
+  if (PR.yt) { PR.yt.destroy(); PR.yt = null; }
+  $("#yt-box").innerHTML = "";
+  PR.kind = "tab"; PR.vid = { points: null };  // the clock is already tab time
+  document.querySelectorAll("[data-pkind]").forEach((b) => b.classList.toggle("on", b.dataset.pkind === "tab"));
+  $("#practice-note").textContent = "Tab sound: MasterPrac plays the tab's own notes, so it is always in sync.";
+  PR.yt = TabSynth(P.tab); PR.yt.init(); PR.ready = true;
+  PR.yt.setPlaybackRate(PR.speed || 1); PR.yt.seekTo(at); PR.yt.playVideo();
+}
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#practice-lesson") || !api() || !P.info) return;
   api().browser_go(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${P.info.title} ${P.info.artist} guitar lesson tab`)}`);
