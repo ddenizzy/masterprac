@@ -33,4 +33,4 @@ img.paste(Image.new("RGBA", (S, S), (255, 214, 140, 255)), (0, 0), shine.point(l
 img.paste(Image.new("RGBA", (S, S), (255, 173, 51, 255)), (0, 0), pickmask(0.62, -25, -20))
 # fill the whole icon: the design area (100..924) scaled up to the full square, no transparent margin
 img = img.crop((100, 100, 924, 924)).resize((S, S), Image.LANCZOS).convert("RGB")
-img.save("/Users/denizyildiz/masterprac/assets/icon.png")
+img.save(__import__("os").path.join(__import__("os").path.dirname(__file__), "icon.png"))
