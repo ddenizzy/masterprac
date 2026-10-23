@@ -17,6 +17,7 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 - **Shows how to play it.** A scrolling tab with techniques drawn as shapes (hammer-ons, slides, bends, vibrato), a fretboard that holds each chord shape, and chord diagrams for the whole song.
 - **Word-timed lyrics.** Lyrics move with the tab, each word at the moment it is sung.
 - **Two modes.** *Follow Spotify*: play songs anywhere and MasterPrac follows. *Play here*: MasterPrac plays the song itself (the recording the tab is timed to), so the tab is always exactly in sync. It starts with the song Spotify is on, or you search one. 25% to 100% speed, part looping and backing tracks.
+- **Practice tools.** *Tab sound* plays the tab's own notes (works even when a song has no recording), *loop any bars*, a *speed trainer* that gets faster each time the loop comes round, and a *count-in*.
 - **Jam mode.** Highlights chord tones and safe notes for improvising over the song.
 
 ## Engineering angle

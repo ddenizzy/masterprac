@@ -653,3 +653,8 @@ body.pl-focus .tabstrip { height: 336px; }
 .o-adv[open] summary h4::before { content: "\25BE  "; }
 .o-adv summary em { font-style: normal; color: var(--muted); letter-spacing: 0; text-transform: none; font-weight: 600; }
 .o-help-full { margin-left: 0; }
+
+/* Play here tools: loop any bars, speed trainer, count-in */
+.pr-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.pr-tools .pr-gap { flex: 1; }
+.pr-tools .chip-t.on { background: var(--accent); color: #1a1208; border-color: var(--accent); }
