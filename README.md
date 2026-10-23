@@ -4,6 +4,8 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 
 <p align="center"><img src="assets/icon.png" width="128" alt="MasterPrac icon"></p>
 
+![MasterPrac playing Ob-La-Di, Ob-La-Da](screenshots/play.png)
+
 ## What it does
 
 - **Follows the music.** Reads the song that is playing on the Mac and loads the matching Songsterr tab.
