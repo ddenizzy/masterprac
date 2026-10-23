@@ -975,8 +975,10 @@ const bar = (label, v) => `<div class="bar"><span>${label}</span><div><i style="
 
 let guideFor = null, guideSeen = null;
 async function loadGuide() {
-  let g;
-  try { g = await (await fetch("/api/guide")).json(); } catch (e) { return; }
+  let g, raw;
+  try { raw = await (await fetch("/api/guide")).text(); g = JSON.parse(raw); } catch (e) { return; }
+  if (raw === loadGuide.last) return;  // nothing new: don't rebuild the page every 3 s
+  loadGuide.last = raw;
   const el = $("#guide");
   if (g.status === "none") { el.innerHTML = `<p class="explain">Open a song in the Songsterr tab: its tone guide appears here.</p>`; return; }
   if (g.status !== "ready") {
@@ -1035,9 +1037,12 @@ setInterval(loadAmp, 4000);
 
 /* ======================= MY SONGS ======================= */
 const mins = (s) => s >= 3600 ? `${(s / 3600).toFixed(1)} h` : `${Math.round(s / 60)} min`;
-async function loadSongs() {
-  let d;
-  try { d = await (await fetch("/api/songs")).json(); } catch (e) { return; }
+async function loadSongs(force) {
+  if (force !== true && tab !== "songs" && tab !== "songsterr") return;  // only where the lists or the star show
+  let d, raw;
+  try { raw = await (await fetch("/api/songs")).text(); d = JSON.parse(raw); } catch (e) { return; }
+  if (raw === loadSongs.last) return;
+  loadSongs.last = raw;
   const row = (e) => `<li><button class="song" data-url="${esc(e.url)}"><b>${esc(e.title)}</b><span>${esc(e.artist)}</span></button>
     <span class="sub">${mins(e.seconds)} · ${e.sessions}×${e.last ? " · last " + e.last : ""}</span>
     <button class="ghost icon" data-unfav="${e.id}" title="Remove from favourites">${d.fav_ids.includes(e.id) ? "&#9733;" : "&#9734;"}</button></li>`;
@@ -1048,7 +1053,7 @@ async function loadSongs() {
   $("#fav-btn").classList.toggle("on", !!(cur && d.fav_ids.includes(cur)));
 }
 setInterval(loadSongs, 5000);
-loadSongs();
+loadSongs(true);
 
 
 /* ======================= LEARN: how keys work + ask Claude ======================= */
