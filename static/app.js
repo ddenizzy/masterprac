@@ -1770,7 +1770,7 @@ function stopPractice() {
   P.info = null; P.songId = null; pollNow();
 }
 function setModeSeg(mode) {
-  document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  document.querySelectorAll("[data-appmode]").forEach((b) => b.classList.toggle("on", b.dataset.appmode === mode));
 }
 // Play here: start with the song Spotify is on (its tab is already found); nothing playing -> search
 function playHere() {
@@ -1783,8 +1783,8 @@ $("#pr-form").addEventListener("submit", (e) => { e.preventDefault(); const q = 
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.dataset.mode === "play" && !PR.on) playHere();
-  if (b.dataset.mode === "follow" && PR.on) stopPractice();
+  if (b.dataset.appmode === "play" && !PR.on) playHere();
+  if (b.dataset.appmode === "follow" && PR.on) stopPractice();
   if (b.id === "practice-other") { openPop("#pop-practice"); prShow(null); setTimeout(() => $("#pr-q").focus(), 50); }
   if (b.dataset.practice) startPractice(Number(b.dataset.practice), b.dataset.title, b.dataset.artist);
   if (b.id === "practice-exit") stopPractice();

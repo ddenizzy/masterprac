@@ -645,4 +645,4 @@ body.pl-focus .tabstrip { height: 336px; }
 
 /* Follow Spotify | Play here switch in the top bar */
 .mode-seg { align-self: center; }
-.mode-seg .seg-b { padding: 4px 12px; font-size: 13px; }
+.mode-seg .seg-b { padding: 4px 12px; font-size: 13px; white-space: nowrap; }
