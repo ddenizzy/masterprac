@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>MasterPrac</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><b>MasterPrac</b><span id="song-chip" class="song-chip">No song yet</span></div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="play">Play</button>
+      <span class="tabs-sep"></span>
+      <button class="tab win" data-tab="songsterr" title="Opens as a window over Play">Songsterr</button>
+      <button class="tab win" data-tab="amp">Amp &amp; tone</button>
+      <button class="tab win" data-tab="learn">Learn</button>
+      <button class="tab win" data-tab="songs">My songs</button>
+      <button class="tab win" data-tab="help">How it works</button>
+      <button class="tab win" data-tab="settings">Settings</button>
+    </nav>
+    <div class="status">
+      <button class="pill pill-btn" id="pl-practice" title="Pick a song: MasterPrac plays it itself, exactly in sync with the tab">Practice a song</button>
+      <button class="pill pill-btn" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
+      <span class="pill" id="pill-sound" title="Where the Mac's sound plays">Sound</span>
+      <span class="pill" id="pill-spotify" title="Spotify while you practise">Spotify</span>
+    </div>
+  </header>
+
+  <div class="hidden"><span id="pl-out"></span><button id="pl-options"></button><button id="pl-open" disabled></button></div>
+
+  <!-- SONGSTERR: a real browser sits over #browser-area (placed by the app) -->
+  <section class="view win hidden" id="view-songsterr">
+    <div class="browser-bar">
+      <button class="icon" data-nav="back" title="Back">&#8592;</button>
+      <button class="icon" data-nav="forward" title="Forward">&#8594;</button>
+      <button class="icon" data-nav="reload" title="Reload">&#8635;</button>
+      <form id="search"><input id="search-q" placeholder="Search a song on Songsterr..." autocomplete="off"></form>
+      <button class="ghost" id="spotify-song" title="Open the song Spotify is playing">Spotify's song</button>
+      <button class="ghost star" id="fav-btn" title="Save this song in My songs">&#9734; Favourite</button>
+      <button class="ready hidden" id="guide-ready" data-go="amp">Tone guide ready &#8594;</button>
+    </div>
+    <div id="browser-area" class="browser-area"><p>Loading Songsterr...</p></div>
+  </section>
+
+  <!-- PLAY: whatever plays on the Mac (any app) -> its tab from Songsterr, scrolling; chords; the fretboard -->
+  <section class="view" id="view-play">
+    <div class="pl-top">
+      <div class="pl-song">
+        <span class="kicker" id="pl-app">NOTHING PLAYING</span>
+        <div class="pl-title"><b id="pl-title">Play a song in any app</b><span id="pl-artist">Spotify, YouTube, Apple Music... MasterPrac follows it.</span></div>
+        <div class="pl-time"><button class="ghost icon play-btn" id="pl-playbtn" title="Play / pause (Spotify follows)">&#9654;</button><span id="pl-pos">0:00</span><div class="pl-bar"><i id="pl-fill"></i></div><span id="pl-dur">0:00</span></div>
+      </div>
+    </div>
+
+    <div class="practice-bar hidden" id="practice-bar">
+      <span class="kicker">PRACTICE MODE</span>
+      <div class="seg"><button class="seg-b on" data-pkind="song">Original song</button><button class="seg-b" data-pkind="backing" id="pk-backing">Backing track (no guitar)</button></div>
+      <div class="seg"><button class="seg-b" data-speed="0.5">50%</button><button class="seg-b" data-speed="0.75">75%</button><button class="seg-b on" data-speed="1">100%</button></div>
+      <span class="sub" id="practice-note">Exactly in sync: the tab follows the video's own clock.</span>
+      <button class="ghost" id="practice-lesson" title="Video lessons for this song (opens in the Songsterr window's browser)">Watch a lesson</button>
+      <button class="ghost" id="practice-exit">Leave practice</button>
+      <div class="pr-secs" id="pr-secs"></div>
+      <div class="yt-box" id="yt-box"><div id="yt"></div></div>
+    </div>
+    <div class="pl-now">
+      <div class="np-box np-info big"><span class="kicker">CHORD NOW</span><b id="pl-chord">-</b></div>
+      <div class="np-box np-info"><span class="kicker">NEXT</span><b id="pl-next">-</b><span class="sub" id="pl-in"></span></div>
+      <div class="np-box np-info"><span class="kicker">WHERE</span><b id="pl-section">-</b><span class="sub" id="pl-barno"></span></div>
+      <div class="np-box"><span class="kicker">KEY</span><b id="pl-key">-</b><span class="sub" id="pl-keysub"></span></div>
+      <div class="pl-heads" id="pl-heads"><span class="kicker">HEADS UP</span><ul id="pl-heads-list"><li class="sub">Play a song and tips for what's coming show here.</li></ul></div>
+    </div>
+
+    <div class="pl-ph" data-panel="tab"><div class="seg view-seg"><button class="seg-b on" data-tview="tab">Tab</button><button class="seg-b" data-tview="highway">Highway</button><button class="seg-b" id="pl-chords" title="The song's chords over the lyrics, like a song sheet (click again for the tab)">Song chords</button></div>
+      <span class="tab-rest hidden" id="tab-rest"></span>
+      <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE TAB</span><button class="chip-t" data-tshow="lyrics" title="The sung words under the tab">Lyrics</button>
+        <button class="chip-t" data-tshow="chords" title="Chord names above the tab">Chords</button>
+        <button class="chip-t" data-tshow="reps" title="Write out every strum of the same chord again (off: a light line, numbers only when the chord changes)">Repeated strums: numbers</button>
+        <button class="chip-t" data-tshow="held" title="Notes still ringing from before, shown as (3): you don't pick them again">Held notes</button>
+        <button class="chip-t" data-tshow="muted" title="Muted, scratchy hits: a grey line across the strings">Muted notes</button>
+        <button class="chip-t" data-tshow="strum" title="Arrows under the tab: strum down (thick to thin string) or up">Strum arrows</button>
+        <button class="chip-t" data-tshow="tech" title="Bends (b), hammer-ons (h), slides (/), vibrato (~), palm mute (P.M.)">Techniques</button></div></details>
+      <div class="tab-part hidden" id="tab-partbox"><span class="kicker">GUITAR</span><span class="part-btns" id="part-btns"></span><button class="part-b all-b" id="pl-party" title="Every guitar part of the song at once (party mode)">All</button><select id="tab-part" class="hidden" title="Which guitar part the tab and Learn mode follow"></select></div>
+      <span class="tab-sync hidden" id="tab-sync"></span>
+      <button class="chip-t" id="pl-versions" title="Songsterr often has several tabs of a song: pick the one that matches your recording">Tab version</button>
+      <button class="ghost icon ph-toggle" data-collapse="tab" title="Close / open the tab">&#9662;</button></div>
+    <div class="party hidden" id="party"></div>
+    <div class="sheet hidden" id="sheet"><div class="sheet-chords" id="sheet-chords"></div><div class="sheet-lines" id="sheet-lines"></div></div>
+    <div class="highway pl-body hidden" data-body="tab" id="highway"><canvas id="hw-canvas"></canvas></div>
+    <div class="tabstrip pl-body" data-body="tab" id="tabstrip">
+      <svg id="tab-svg"><g id="tab-g"></g><g id="tab-names"></g><line id="tab-head" class="playhead"/></svg>
+      <p class="tab-empty" id="tab-empty">The song's tab scrolls here while it plays.</p>
+    </div>
+
+    <details class="howto"><summary>How to read the tab</summary><div class="howto-grid">
+      <span><b>7</b> play fret 7 on that string</span>
+      <span><b>(7)</b> still ringing from before: don't pick it again</span>
+      <span><b>x</b> muted: a scratchy, deadened hit</span>
+      <span><b>&lt;12&gt;</b> harmonic: touch the string lightly over the fret</span>
+      <span><svg width="34" height="14"><path d="M3 12 Q17 0 31 12" class="tq-arc"/></svg> hammer-on / pull-off: the next note without picking</span>
+      <span><svg width="34" height="14"><line x1="4" y1="12" x2="30" y2="2" class="tq-slide"/></svg> slide along the string</span>
+      <span><svg width="22" height="16"><path d="M2 14 Q11 14 11 3" class="tq-bend"/><path d="M7 8 L11 3 L15 8" class="tq-head"/></svg> bend the string up</span>
+      <span><svg width="34" height="12"><path d="M2 6 Q5 1 8 6 Q11 11 14 6 Q17 1 20 6 Q23 11 26 6" class="tq-vib"/></svg> vibrato: wobble the note</span>
+      <span><b>P.M.</b> palm mute: rest your picking hand on the strings</span>
+      <span><span class="lg held"></span> fretboard: fingers still holding the chord shape</span>
+    </div></details>
+
+    <div class="pl-ph" data-panel="board"><span class="kicker">FRETBOARD</span>
+      <div class="seg pl-mode">
+        <button class="seg-b on" data-mode="jam" title="Make up your own part: the chords and the notes that sound good">Jam</button>
+        <button class="seg-b" data-mode="learn" title="Copy the guitarist: the exact string and fret, note by note">Learn the part</button>
+      </div>
+      <details class="dd"><summary>Show</summary><div class="dd-menu"><span class="kicker">ON THE FRETBOARD</span><button class="chip-t" data-show="now" title="The note the guitarist plays right now (red)"><i class="dot play"></i>Now</button>
+        <button class="chip-t" data-show="next" title="The notes coming up next (dashed)"><i class="dot next"></i>Next</button>
+        <button class="chip-t" data-show="chord" title="Notes of the chord playing now (green): land on these"><i class="dot chord"></i>Chord notes</button>
+        <button class="chip-t" data-show="scale" title="The key's safe notes (grey) and its home note (orange)"><i class="dot scale"></i>Safe notes</button></div></details>
+      <button class="ghost icon ph-toggle" data-collapse="board" title="Close / open the fretboard">&#9662;</button></div>
+    <div class="board-wrap pl-body" data-body="board"><svg id="pl-board" class="board"></svg></div>
+    <div class="pl-foot" id="pl-foot"></div>
+  </section>
+
+  <!-- SETTINGS (window) -->
+  <section class="view win hidden" id="view-settings">
+    <div class="panel opts">
+      <h2>Settings</h2>
+
+
+    <section class="o-sec"><h4>Look</h4>
+      <div class="o-item"><span class="o-label">Style</span>
+        <select id="o-look"><option value="classic">Classic</option><option value="neon">Neon</option></select></div>
+      <div class="o-item"><span class="o-label">String colours</span>
+        <select id="o-strings"><option value="off">Off</option><option value="two">Two colours</option><option value="each">Each string</option></select></div>
+      <p class="o-help">Two colours alternate strings (easy to follow); each string is Guitar Hero style.</p>
+    </section>
+
+    <section class="o-sec"><h4>Fretboard</h4>
+      <div class="o-item"><span class="o-label">Notes</span>
+        <select id="o-scale"><option value="pent">5 safest</option><option value="full">All 7 of the key</option><option value="blues">Bluesy</option><option value="chord">Only the chord now</option></select></div>
+      <p class="o-help" id="o-scale-help"></p>
+      <label class="o-switch"><input type="checkbox" id="o-realfrets"><i></i><span>Real guitar fret spacing <em>(off = an even grid, easier to read)</em></span></label>
+      <div class="o-item"><span class="o-label">Dots show</span>
+        <select id="o-labels"><option value="names">Note names</option><option value="intervals">Note jobs (R, b3, 5)</option></select></div>
+      <div class="o-item"><span class="o-label">Part of the neck</span>
+        <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></div>
+      <p class="o-help">A box is one hand position (about 4 frets). Learn Box 1 first.</p>
+    </section>
+
+    <section class="o-sec"><h4>Song &amp; timing</h4>
+      <div class="o-item"><span class="o-label">Chords from</span>
+        <select id="o-src"><option value="tab">The tab (exact)</option><option value="ear">Listening</option></select></div>
+      <label class="o-switch"><input type="checkbox" id="o-autosync" checked><i></i><span>Sync the tab to the music by listening</span></label>
+      <div class="o-item"><span class="o-label">Early / late?</span>
+        <span class="o-nudge"><button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></span></div>
+    </section>
+
+    <section class="o-sec"><h4>Play page</h4>
+      <div class="o-row"><span>Look</span><div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div></div>
+      <label class="o-switch"><input type="checkbox" id="o-showboxes"><i></i><span>Show the chord now / next / where boxes</span></label>
+      <label class="o-switch"><input type="checkbox" id="o-showkey"><i></i><span>Show the key box</span></label>
+      <label class="o-switch"><input type="checkbox" id="o-autohide" checked><i></i><span>Hide the top bars when I'm not using them <em>(move the mouse to the top to see them)</em></span></label>
+    </section>
+
+    <section class="o-sec"><h4>Guitar part</h4>
+      <label class="o-switch"><input type="checkbox" id="o-autopart" checked><i></i><span>Switch to a guitar that's playing when mine rests</span></label>
+      <div class="o-item"><span class="o-label">I prefer</span>
+        <select id="o-prefer"><option value="any">Any guitar</option><option value="electric">Electric</option><option value="acoustic">Acoustic</option></select></div>
+    </section>
+
+    <section class="o-sec"><h4>Sound</h4>
+      <label class="o-switch"><input type="checkbox" id="o-mute"><i></i><span>Mute Spotify while I practise <em>(it keeps playing, so your listening counts)</em></span></label>
+    </section>
+
+    <div class="o-links"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
+
+    </div>
+  </section>
+
+  <!-- pop-ups -->
+  <div class="pop hidden" id="pop-versions"><div class="pop-card wide">
+    <div class="pop-head"><b>Which tab of this song?</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <p class="explain" id="ver-intro">Songsterr often has several tabs of the same song. Pick the one whose guitars and length match your recording.</p>
+    <div class="ver-list" id="ver-list"></div>
+    <form class="ver-paste" id="ver-paste"><input id="ver-url" placeholder="Or paste any Songsterr tab link..." autocomplete="off"><button type="submit">Use this link</button></form>
+  </div></div>
+  <div class="pop hidden" id="pop-practice"><div class="pop-card wide">
+    <div class="pop-head"><b>Practice a song</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <p class="explain">MasterPrac plays the recording Songsterr's tab is timed to (or a backing track without the guitar), so everything is exactly in sync. Spotify pauses.</p>
+    <form class="ver-paste" id="pr-form"><input id="pr-q" placeholder="Search a song or artist..." autocomplete="off"><button type="submit">Search</button></form>
+    <div class="ver-list" id="pr-list"></div>
+  </div></div>
+  <div class="pop hidden" id="pop-chord"><div class="pop-card cd-pop">
+    <div class="pop-head"><b id="cd-title">Chord</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <div id="cd-body"></div>
+  </div></div>
+  <div class="pop hidden" id="pop-chords"><div class="pop-card wide">
+    <div class="pop-head"><b>The whole song's chords</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <div class="np-map" id="pl-map"></div>
+  </div></div>
+
+  <!-- AMP & TONE -->
+  <section class="view win hidden" id="view-amp">
+    <div class="panel wide">
+      <div id="guide"><p class="explain">Open a song in the Songsterr tab: its tone guide appears here.</p></div>
+      <h2 class="sec">Your amp right now <span class="sub">read-only</span></h2>
+      <div id="amp"><p class="explain">Looking for your HeadRush on Wi-Fi...</p></div>
+    </div>
+  </section>
+
+  <!-- LEARN: how keys work, with the open song as the example, + ask Claude -->
+  <section class="view win hidden" id="view-learn">
+    <div class="learn">
+      <div class="lessons" id="lessons"></div>
+      <aside class="chat">
+        <p class="label">Ask anything</p>
+        <p class="explain">About keys, scales, improvising, this song or your tone. Answers use the song that's open.</p>
+        <div class="chips" id="ask-ideas"></div>
+        <div class="msgs" id="msgs"></div>
+        <form id="ask-form"><input id="ask-q" placeholder="e.g. Why does the minor pentatonic work over this song?" autocomplete="off">
+          <button type="submit">Ask</button></form>
+      </aside>
+    </div>
+  </section>
+
+  <!-- MY SONGS -->
+  <section class="view win hidden" id="view-songs">
+    <div class="panel">
+      <h2>My songs</h2>
+      <p class="explain">Click a song to open it in Songsterr. Press &#9734; Favourite in the Songsterr tab to save one here;
+        "Most practised" fills itself from the time each song is open.</p>
+      <h3>Favourites</h3><ul class="songs" id="favs"></ul>
+      <h3>Most practised</h3><ul class="songs" id="practised"></ul>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="view win hidden" id="view-help">
+    <div class="panel">
+      <h2>How MasterPrac works</h2>
+      <ol class="points">
+        <li><b>Play:</b> follows whatever plays on your Mac in any app (Spotify, YouTube, Apple Music...). It pulls the song's tab from
+          Songsterr and scrolls it with the music. <b>Jam</b> shows the chord now and the notes that sound good over it;
+          <b>Learn the part</b> shows the exact string and fret the guitarist plays. No tab for a song? The chords are worked out by ear.</li>
+        <li><b>Songsterr tab:</b> a browser built into the app. Open any song; MasterPrac recognises it and the other tabs follow it.</li>
+        <li><b>When it opens,</b> it finds the song Spotify is playing and moves the Mac's sound to your HeadRush over Bluetooth
+          (only if the amp is on). Muting Spotify is off unless you turn it on in Play &gt; Options.</li>
+        <li><b>When you close it,</b> the sound goes back to your Kali speakers and Spotify's volume comes back.</li>
+        <li><b>Your saved rigs are never changed.</b></li>
+      </ol>
+      <div class="row">
+        <button data-sound="amp">Play the Mac's sound through the amp</button>
+        <button class="ghost" data-sound="speakers">Play through the Kali speakers</button>
+      </div>
+      <h3>What MasterPrac did</h3>
+      <ul class="log" id="log"></ul>
+    </div>
+  </section>
+
+  <div class="toast hidden" id="toast"></div>
+  <script src="/static/chords.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,644 @@
+:root { --bg: #12100e; --card: #1c1916; --line: #2e2924; --text: #f3ede4; --muted: #a39a8e; --accent: #ffad33; --ok: #7ed98b; --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; display: flex; flex-direction: column; font: 400 15px/1.5 var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+/* top bar */
+.top { display: flex; align-items: center; gap: 18px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.brand b { font-size: 18px; letter-spacing: -.3px; }
+.brand b::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); vertical-align: 1px; }
+.song-chip { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tabs { display: flex; gap: 4px; background: var(--card); padding: 4px; border-radius: 12px; border: 1px solid var(--line); }
+.tab { font: 600 14px var(--font); padding: 7px 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--accent); color: #1a1208; }
+.status { display: flex; gap: 6px; flex: 1; justify-content: flex-end; }
+.pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+
+/* views */
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.browser-bar form { flex: 1; }
+.browser-bar input { width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: 14px var(--font); outline: none; }
+.browser-bar input:focus { border-color: var(--accent); }
+.browser-area { flex: 1; min-height: 0; display: grid; place-items: center; color: var(--muted); background: #fff1; }
+.panel { width: 100%; margin: 0 auto; padding: 28px 22px; overflow: auto; }
+h2 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.4px; }
+h3 { margin: 26px 0 8px; font-size: 16px; }
+.soon { font-size: 12px; font-weight: 700; vertical-align: 4px; margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.explain { color: var(--muted); margin: 0 0 10px; }
+.points { margin: 0; } .points li { margin: 8px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+button { font: 600 14px var(--font); padding: 8px 14px; border-radius: 9px; border: 1px solid var(--accent); background: var(--accent); color: #1a1208; cursor: pointer; }
+button.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+button.icon { width: 34px; padding: 6px 0; background: var(--card); border-color: var(--line); color: var(--text); font-size: 16px; }
+button:hover { filter: brightness(1.1); } button:disabled { opacity: .5; }
+.log { list-style: none; margin: 0; display: grid; gap: 6px; }
+.log li { font-size: 13px; } .log span { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.hidden { display: none !important; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px; background: var(--accent); color: #1a1208; font-weight: 600; z-index: 9; }
+
+/* ---------- the fretboard (shared) ---------- */
+select { font: 14px var(--font); padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.board-wrap { background: linear-gradient(#2a1f17, #1f1712); border: 1px solid var(--line); border-radius: 16px; padding: 4px 8px; flex-shrink: 0; }
+.board { width: 100%; height: 300px; display: block; }
+.board .fret { stroke: #c9b796; stroke-width: 3.5; opacity: .7; } .board .fret.twelve { stroke-width: 6; }
+.board .nut { fill: #e8dcc4; }
+.board .string { stroke: #e6dac0; opacity: .85; }
+.board .inlay { fill: #d6c6a6; opacity: .6; }
+.board .fnum { fill: #cfc5b8; font: 700 14px var(--font); text-anchor: middle; }
+.board .sname { fill: #e6ddd2; font: 800 16px var(--font); }
+.board .note text { font: 800 14px var(--font); text-anchor: middle; pointer-events: none; }
+.board .note.scale circle { fill: #4a413b; stroke: #a89a8a; stroke-width: 1.5; } .board .note.scale text { fill: #fff; }
+.board .note.chord circle { fill: #7ed98b; } .board .note.chord text { fill: #0e2a12; }
+.board .note.root circle { fill: var(--accent); } .board .note.root text { fill: #1a1208; }
+.board .note.hot circle { filter: drop-shadow(0 0 7px rgba(126, 217, 139, .9)); }
+.board .note.root.hot circle { stroke: #7ed98b; stroke-width: 3; }
+.board .note.dim { opacity: .4; }
+.board .note.play circle { fill: #ff6b3d; stroke: #fff; stroke-width: 3; filter: drop-shadow(0 0 10px rgba(255, 107, 61, .95)); }
+.board .note.play text { fill: #fff; font-size: 16px; }
+.board .note.next circle { fill: transparent; stroke: #ffd27a; stroke-width: 3; stroke-dasharray: 4 3; }
+.board .note.next text { fill: #ffd27a; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 5px 0 2px; vertical-align: -1px; }
+.dot.play { background: #ff6b3d; } .dot.next { border: 2px dashed #ffd27a; }
+.seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 11px; padding: 3px; }
+.seg-b { border: 0; background: transparent; color: var(--muted); padding: 7px 14px; }
+.seg-b.on { background: var(--accent); color: #1a1208; }
+.kicker { font-size: 11px; font-weight: 800; letter-spacing: 1.4px; color: var(--muted); text-transform: uppercase; }
+
+/* ---------- PLAY ---------- */
+#view-play { padding: 14px 18px 16px; gap: 12px; overflow: auto; }
+.pl-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+.pl-song { flex: 1; min-width: 300px; }
+.pl-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 1px 0 4px; }
+.pl-title b { font-size: 24px; letter-spacing: -.3px; } .pl-title span { color: var(--muted); }
+.pl-time { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; max-width: 460px; }
+.pl-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.pl-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.pl-mode .seg-b { font-size: 15px; padding: 8px 18px; }
+.pl-actions { display: flex; gap: 8px; }
+.pl-now { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.np-box { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 10px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; min-width: 120px; }
+.np-box b { font-size: 24px; line-height: 1.1; white-space: nowrap; } .np-box .sub { font-size: 12px; }
+.np-box.big b { font-size: 46px; letter-spacing: -1px; color: #7ed98b; min-width: 100px; }
+.pl-heads { flex: 1; min-width: 280px; padding: 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+.pl-heads ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; } .pl-heads li::marker { color: var(--accent); }
+/* the scrolling tab */
+.tabstrip { position: relative; flex-shrink: 0; background: #f5efe4; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 1px #0002; }
+#tab-svg { width: 100%; height: 100%; display: block; }
+.tline { stroke: #9a8f80; stroke-width: 1; } .tbar { stroke: #5c5246; stroke-width: 1.5; }
+.tname { fill: #8a7f70; font: 700 11px var(--font); text-anchor: middle; }
+.tnum { fill: #8a7f70; font: 600 10px var(--font); }
+.tsec { fill: #b45f00; font: 800 11px var(--font); letter-spacing: 1px; text-transform: uppercase; }
+.tchord { fill: #1d7a35; font: 800 15px var(--font); }
+.tbg { fill: #f5efe4; }
+.tnote { fill: #1c1712; font: 700 12.5px "SF Mono", Menlo, monospace; } .tnote.tied { fill: #9a8f80; }
+.tflag { fill: #8a7f70; font: 600 9.5px var(--font); }
+.tb.on .tnote { fill: #e8461a; } .tb.on .tbg { fill: #ffe1d4; }
+.playhead { stroke: #e8461a; stroke-width: 2.5; opacity: .85; }
+.tab-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 30px; text-align: center; color: #6b6156; font-size: 15px; }
+/* under the fretboard */
+.pl-foot { display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center; font-size: 14px; }
+.pl-foot .kicker { margin-right: 6px; }
+.notes span { display: inline-block; min-width: 30px; text-align: center; padding: 2px 7px; margin: 1px; border-radius: 7px; background: #3b3430; font-weight: 700; font-size: 13px; }
+.notes span.root { background: var(--accent); color: #1a1208; } .notes span.chord { background: #7ed98b; color: #0e2a12; }
+
+/* ---------- pop-ups ---------- */
+.pop { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: #0009; backdrop-filter: blur(3px); }
+.pop-card { width: min(520px, 92vw); max-height: 86vh; overflow: auto; display: grid; gap: 12px; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 20px 60px #000a; }
+.pop-card.wide { width: min(860px, 94vw); }
+.pop-head { display: flex; justify-content: space-between; align-items: center; font-size: 18px; }
+.pop-card label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--muted); text-transform: uppercase; }
+.pop-card .explain { margin: -6px 0 0; font-size: 13px; }
+
+.np-map { display: grid; gap: 4px; }
+.np-map .sec { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 7px 10px; border-radius: 10px; background: var(--bg); }
+.np-map .sec > b { width: 130px; font-size: 13px; flex-shrink: 0; } .np-map .sec > .sub { width: 60px; font-size: 12px; }
+.np-map .ch { display: inline-block; padding: 2px 9px; border-radius: 7px; background: var(--line); font-weight: 600; font-size: 14px; }
+.np-map .ch.now { background: #7ed98b; color: #0e2a12; }
+
+/* ---------- page polish: every tab feels the same ---------- */
+.panel { max-width: 980px; }
+.panel h2 + .explain { margin-bottom: 18px; }
+.songs li:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.points li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; list-style-position: inside; }
+.points { padding-left: 0; display: grid; gap: 8px; }
+.log { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; max-height: 260px; overflow: auto; }
+.top { background: color-mix(in srgb, var(--card) 55%, var(--bg)); }
+@media (max-width: 1100px) { .pl-actions { width: 100%; } .np-box.big b { font-size: 38px; } }
+/* ---------- AMP & TONE ---------- */
+.panel.wide { max-width: 1180px; }
+.sub { color: var(--muted); font-weight: 400; font-size: 14px; }
+.sec { margin-top: 30px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.chips span { padding: 5px 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.chips b { color: var(--text); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.card { padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.label { margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.why { margin: 8px 0; font-size: 14px; color: var(--muted); } .why b { color: var(--text); }
+.switch { display: grid; gap: 4px; }
+.switch .pos { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+.switch .pos i { width: 26px; height: 8px; border-radius: 4px; background: var(--line); }
+.switch .pos.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); font-weight: 600; }
+.switch .pos.on i { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.switch .pos.lead i { background: #7ed98b; }
+.dials { display: flex; gap: 10px; margin-top: 10px; }
+.dial { display: grid; justify-items: center; font-size: 12px; color: var(--muted); }
+.dial svg { width: 56px; height: 56px; } .dial b { color: var(--text); font-size: 15px; margin-top: -4px; }
+.dial-bg { fill: #2a2420; stroke: var(--line); stroke-width: 2; } .dial-hand { stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.bar { display: grid; grid-template-columns: 74px 1fr 30px; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 5px 0; }
+.bar div { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); }
+.bar b { color: var(--text); text-align: right; }
+.fx { margin: 8px 0 12px; padding-left: 18px; font-size: 14px; color: var(--muted); } .fx b { color: var(--text); }
+.blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.block { padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); opacity: .55; }
+.block.on { opacity: 1; border-color: color-mix(in srgb, #7ed98b 45%, var(--line)); }
+.block p { margin: 0; display: flex; justify-content: space-between; font-size: 14px; }
+.block p span { font-size: 11px; font-weight: 800; color: var(--muted); } .block.on p span { color: #7ed98b; }
+.block .sub { font-size: 12px; margin-bottom: 6px; }
+
+/* ---------- toolbar extras + MY SONGS ---------- */
+button.star.on { color: var(--accent); border-color: var(--accent); }
+button.ready { background: #7ed98b; border-color: #7ed98b; color: #0e2a12; }
+.songs { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.songs li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+button.song { flex: 1; text-align: left; background: transparent; border: 0; color: var(--text); padding: 4px; }
+button.song span { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+
+/* learn */
+.learn { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; padding: 20px; overflow: hidden; }
+.lessons { overflow: auto; padding-right: 6px; }
+.lesson { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin: 10px 0; }
+.lesson summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+.lesson p { color: var(--muted); margin: 10px 0 4px; } .lesson p b { color: var(--text); }
+.chat { display: flex; flex-direction: column; min-height: 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.chat .chips { margin: 0 0 10px; } .idea { font-size: 12px; padding: 5px 9px; text-align: left; }
+.msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.msg { padding: 9px 12px; border-radius: 12px; font-size: 14px; max-width: 92%; }
+.msg.user { align-self: flex-end; background: var(--accent); color: #1a1208; }
+.msg.claude { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+.msg.wait { color: var(--muted); font-style: italic; }
+#ask-form { display: flex; gap: 8px; }
+#ask-form input { flex: 1; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 14px var(--font); }
+@media (max-width: 980px) { .learn { grid-template-columns: 1fr; overflow: auto; } }
+
+.tnames-bg { fill: #ece4d6; }
+
+.tab-part { position: absolute; top: 8px; right: 10px; display: flex; align-items: center; gap: 8px; background: #fffaf2e6; border: 1px solid #0001; border-radius: 10px; }
+
+.tab-part select { background: #fff; color: #1c1712; border-color: #d8cdbd; max-width: 420px; }
+.tab-rest { position: absolute; left: 50%; top: 58%; transform: translate(-30%, -50%); display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: #1c1712e8; color: #f3ede4; font-size: 14px; font-weight: 600; }
+.tab-rest button.ghost { color: #ffd27a; border-color: #ffd27a66; padding: 5px 10px; font-size: 13px; }
+button.mini { padding: 3px 9px; font-size: 12px; margin-left: 6px; }
+.tab-sync { position: absolute; top: 8px; padding: 5px 10px; border-radius: 9px; background: #fffaf2e6; border: 1px solid #0001; color: #8a7f70; font-size: 12px; font-weight: 700; }
+.tab-sync.ok { color: #1d7a35; border-color: #1d7a3544; }
+
+/* panel headers: close/open the tab and the fretboard */
+.pl-ph { display: flex; align-items: center; flex-shrink: 0; }
+.pl-ph .ph-hint { font-size: 12px; }
+.pl-ph .ph-toggle { margin-left: auto; width: 30px; padding: 3px 0; font-size: 13px; transition: transform .15s; }
+.pl-ph.collapsed .ph-toggle { transform: rotate(-90deg); }
+.show-row { display: flex; align-items: center; gap: 6px; margin-left: 14px; flex-wrap: wrap; }
+.chip-t { font: 600 12.5px var(--font); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+.chip-t.on { background: var(--card); color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.chip-t .dot { width: 9px; height: 9px; }
+.dot.chord { background: #7ed98b; } .dot.scale { background: #4a413b; border: 1px solid #a89a8a; } .dot.root { background: var(--accent); }
+
+/* full screen: only the chord, the tab and the fretboard */
+body.pl-focus .top .tabs, body.pl-focus .top .brand, body.pl-focus .top .status > :not(#pl-full), body.pl-focus .pl-heads, body.pl-focus .pl-foot, body.pl-focus .ph-hint, body.pl-focus .pl-actions > :not(#pl-full), body.pl-focus .pl-time { display: none !important; }
+body.pl-focus #view-play { padding: 12px 16px; gap: 10px; }
+
+body.pl-focus .np-box.big b { font-size: 60px; }
+
+/* tab version picker */
+.ver-list { display: grid; gap: 8px; max-height: 56vh; overflow: auto; }
+.ver { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.ver.on { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.ver-main { flex: 1; min-width: 0; }
+.ver-tags, .ver-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 12.5px; }
+.ver-tags span, .ver-parts span { padding: 2px 8px; border-radius: 7px; background: var(--card); color: var(--muted); }
+.ver-tags span.good { color: #7ed98b; }
+.ver-parts i { font-style: normal; color: var(--muted); margin-left: 4px; }
+.ver-parts span { color: var(--text); }
+.ver-cur { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: var(--accent); }
+.ver-paste { display: flex; gap: 8px; }
+.ver-paste input { flex: 1; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 14px var(--font); }
+
+/* guitar part buttons on the tab (bigger, bolder) */
+.tab-part { padding: 6px 8px 6px 12px; border-width: 2px; border-color: #0002; box-shadow: 0 2px 8px #0002; }
+.tab-part .kicker { color: #6b6156; font-size: 12px; }
+.part-btns { display: flex; gap: 6px; }
+.part-b { font: 700 13.5px var(--font); padding: 6px 12px; border-radius: 9px; border: 2px solid #c9bda9; background: #fff; color: #2a231c; display: inline-flex; align-items: center; gap: 7px; }
+.part-b i { font-style: normal; font-weight: 600; font-size: 11.5px; color: #8a7f70; }
+.part-b.on { background: #1c1712; color: #fff; border-color: #1c1712; }
+.part-b.on i { color: #ffd27a; }
+.part-b:hover:not(.on) { border-color: #8a7f70; }
+.tab-part select { font-size: 14px; font-weight: 700; padding: 6px 10px; border-width: 2px; }
+/* lyrics: readable */
+
+/* guitar buttons live in the tab's header row (they covered the top strings inside the tab) */
+.pl-ph .tab-part { position: static; display: flex; align-items: center; margin-left: auto; padding: 0; background: none; border: 0; box-shadow: none; }
+.pl-ph .tab-part.hidden { display: none; }
+.pl-ph .tab-part .kicker { color: var(--muted); }
+.pl-ph .part-b { background: var(--card); color: var(--text); border-color: var(--line); }
+.pl-ph .part-b i { color: var(--muted); }
+.pl-ph .part-b.on { background: var(--accent); color: #1a1208; border-color: var(--accent); }
+.pl-ph .part-b.on i { color: #1a1208; }
+.pl-ph .tab-part select { background: var(--card); color: var(--text); border-color: var(--line); }
+.pl-ph .tab-part ~ .ph-toggle { margin-left: 8px; }
+.pl-ph { row-gap: 6px; }
+
+/* one lyrics line: inside the tab, under the strings (bigger, the sung part in red) */
+.tlyric { font: 700 17px var(--font); fill: #3d352d; }
+.tlyric.first { fill: #1c1712; font-weight: 800; }
+.tlyric.on { fill: #e8461a; }
+
+/* techniques on the fretboard */
+.board .tech-arrow line { stroke: #ffd27a; stroke-width: 4; stroke-linecap: round; }
+.board .tech-arrow path { fill: #ffd27a; }
+.board .tech-arrow.hammer line { stroke-dasharray: 7 5; }
+.board .tech-arrow text, .board .tech-bend text { fill: #ffd27a; font: 800 12px var(--font); text-anchor: middle; }
+.board .tech-bend text { text-anchor: start; }
+.board .tech-bend path { stroke: #ffd27a; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.board .tech-badge rect { fill: #ffd27a; }
+.board .tech-badge text { fill: #1a1208; font: 800 11px var(--font); text-anchor: middle; }
+
+/* "this part rests" lives in the tab's header row, never over the notes */
+.pl-ph .tab-rest { position: static; transform: none; display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--text); font-weight: 600; }
+.pl-ph .tab-rest.hidden { display: none; }
+.pl-ph .tab-rest button.ghost { padding: 3px 10px; font-size: 12px; border-radius: 999px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+
+/* fretboard animation trails */
+.board .fx-trail { fill: #ff6b3d; }
+
+.tabstrip { height: 214px; }
+/* an open string being played lights up end to end */
+.board .fx-string { stroke: #ff6b3d; stroke-width: 5; filter: drop-shadow(0 0 6px rgba(255, 107, 61, .9)); }
+
+/* ---------- NEON look (Guitar Hero colours: low E green, A red, D yellow, G blue, B orange, high E purple) ---------- */
+body.neon { --bg: #05050b; --card: #0d0d1a; --line: #25254a; --text: #f1f0ff; --muted: #9a98c6; --accent: #9b5cff; }
+body.neon .tab.active, body.neon .seg-b.on, body.neon button:not(.ghost):not(.icon):not(.chip-t):not(.part-b):not(.tab):not(.seg-b):not(.pill-b):not(.song):not(.part-b):not(.ver button) { background: #9b5cff; border-color: #9b5cff; color: #12001a; }
+body.neon .board-wrap { background: radial-gradient(ellipse at 50% 0%, #1a1240 0%, #07070f 70%); border-color: #2b2560; box-shadow: 0 0 30px #5b2bff33 inset; }
+body.neon .board .fret { stroke: #6c6ad8; opacity: .55; }
+body.neon .board .nut { fill: #b9b7ff; }
+body.neon .board .inlay { fill: #6c6ad8; }
+body.neon .board .string { opacity: .95; }
+body.neon .board .note.scale circle { fill: #14142a; stroke: #4a48a0; } body.neon .board .note.scale text { fill: #d8d6ff; }
+body.neon .board .note.chord circle { fill: #39ff88; filter: drop-shadow(0 0 8px #39ff88); }
+body.neon .board .note.root circle { fill: #9b5cff; filter: drop-shadow(0 0 8px #9b5cff); } body.neon .board .note.root text { fill: #12001a; }
+
+body.neon .board .note.play circle { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 6px #fff8); }
+body.neon .tabstrip { background: #090914; box-shadow: inset 0 0 0 1px #2b2560, 0 0 24px #5b2bff22; }
+body.neon .tline { stroke: #34346a; } body.neon .tbar { stroke: #6c6ad8; }
+body.neon .tbg, body.neon .tnames-bg { fill: #090914; }
+body.neon .tnote { fill: #e9e8ff; } body.neon .tnote.tied { fill: #5d5b99; }
+body.neon .tname, body.neon .tnum, body.neon .tflag { fill: #7e7cc0; }
+body.neon .tchord { fill: #39ff88; } body.neon .tsec { fill: #9b5cff; }
+body.neon .tb.on .tnote { fill: #9b5cff; } body.neon .tb.on .tbg { fill: #1d1240; }
+body.neon .playhead { stroke: #9b5cff; filter: drop-shadow(0 0 6px #9b5cff); opacity: 1; }
+body.neon .tlyric { fill: #b8b6e8; } body.neon .tlyric.first { fill: #f1f0ff; } body.neon .tlyric.on { fill: #9b5cff; }
+body.neon .tab-sync { background: #0d0d1a; border-color: #2b2560; color: #9a98c6; } body.neon .tab-sync.ok { color: #39ff88; }
+body.neon .tab-empty { color: #9a98c6; }
+body.neon .np-box.big b { color: #39ff88; text-shadow: 0 0 18px #39ff8866; }
+
+/* smooth page changes */
+
+.pl-body { transition: opacity .18s; }
+/* Tab | Highway */
+.view-seg .seg-b { padding: 4px 12px; font-size: 13px; }
+.look-seg .seg-b { padding: 7px 12px; }
+.highway { position: relative; height: 330px; border-radius: 14px; overflow: hidden; flex-shrink: 0; background: #04040a; box-shadow: inset 0 0 0 1px #2b2560; }
+.highway canvas { width: 100%; height: 100%; display: block; }
+.highway.off, .tabstrip.off { display: none !important; }
+
+.view.enter { animation: view-in .22s ease-out backwards; }
+@keyframes view-in { from { opacity: .001; transform: translateY(6px); } }
+
+/* tab header: one compact row, close to the tab */
+.pl-ph { gap: 8px; margin-bottom: -8px; flex-wrap: nowrap; min-width: 0; }
+.pl-ph .show-row { margin-left: 6px; gap: 4px; flex-wrap: nowrap; }
+.pl-ph .chip-t { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
+.pl-ph .tab-part { gap: 5px; min-width: 0; }
+.pl-ph .part-btns { gap: 4px; min-width: 0; }
+.pl-ph .part-b { font-size: 12px; padding: 4px 9px; border-width: 1.5px; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.pl-ph .part-b i { font-size: 10.5px; }
+.pl-ph .view-seg { flex-shrink: 0; }
+@media (max-width: 1350px) { .pl-ph .show-row > .kicker, .pl-ph .tab-part > .kicker { display: none; } }
+
+.pl-ph .tab-rest { white-space: nowrap; flex-shrink: 0; font-size: 12px; padding: 3px 4px 3px 10px; }
+.pl-ph .tab-rest button.ghost { white-space: nowrap; }
+
+/* ---------- string colours (Options > String colours): Off / Two colours / Each string, in Classic and Neon ---------- */
+body.str-two { --s0: #22d3ee; --s1: #ffb02e; --s2: #22d3ee; --s3: #ffb02e; --s4: #22d3ee; --s5: #ffb02e; }
+body.str-each { --s0: #b07bff; --s1: #ff9a3b; --s2: #3bb8ff; --s3: #ffe23b; --s4: #ff4d5e; --s5: #39ff88; }
+body:is(.str-two, .str-each) .board .string.s0 { stroke: var(--s0); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s0 circle, body:is(.str-two, .str-each) .board .fx-trail.s0 { fill: var(--s0); }
+body:is(.str-two, .str-each) .board .fx-string.s0 { stroke: var(--s0); filter: drop-shadow(0 0 8px var(--s0)); }
+body.neon:is(.str-two, .str-each) .board .string.s0 { filter: drop-shadow(0 0 3px var(--s0)); }
+body.neon .board .note.play.s0 circle { filter: drop-shadow(0 0 12px var(--s0, #9b5cff)); }
+body:is(.str-two, .str-each) .board .string.s1 { stroke: var(--s1); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s1 circle, body:is(.str-two, .str-each) .board .fx-trail.s1 { fill: var(--s1); }
+body:is(.str-two, .str-each) .board .fx-string.s1 { stroke: var(--s1); filter: drop-shadow(0 0 8px var(--s1)); }
+body.neon:is(.str-two, .str-each) .board .string.s1 { filter: drop-shadow(0 0 3px var(--s1)); }
+body.neon .board .note.play.s1 circle { filter: drop-shadow(0 0 12px var(--s1, #9b5cff)); }
+body:is(.str-two, .str-each) .board .string.s2 { stroke: var(--s2); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s2 circle, body:is(.str-two, .str-each) .board .fx-trail.s2 { fill: var(--s2); }
+body:is(.str-two, .str-each) .board .fx-string.s2 { stroke: var(--s2); filter: drop-shadow(0 0 8px var(--s2)); }
+body.neon:is(.str-two, .str-each) .board .string.s2 { filter: drop-shadow(0 0 3px var(--s2)); }
+body.neon .board .note.play.s2 circle { filter: drop-shadow(0 0 12px var(--s2, #9b5cff)); }
+body:is(.str-two, .str-each) .board .string.s3 { stroke: var(--s3); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s3 circle, body:is(.str-two, .str-each) .board .fx-trail.s3 { fill: var(--s3); }
+body:is(.str-two, .str-each) .board .fx-string.s3 { stroke: var(--s3); filter: drop-shadow(0 0 8px var(--s3)); }
+body.neon:is(.str-two, .str-each) .board .string.s3 { filter: drop-shadow(0 0 3px var(--s3)); }
+body.neon .board .note.play.s3 circle { filter: drop-shadow(0 0 12px var(--s3, #9b5cff)); }
+body:is(.str-two, .str-each) .board .string.s4 { stroke: var(--s4); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s4 circle, body:is(.str-two, .str-each) .board .fx-trail.s4 { fill: var(--s4); }
+body:is(.str-two, .str-each) .board .fx-string.s4 { stroke: var(--s4); filter: drop-shadow(0 0 8px var(--s4)); }
+body.neon:is(.str-two, .str-each) .board .string.s4 { filter: drop-shadow(0 0 3px var(--s4)); }
+body.neon .board .note.play.s4 circle { filter: drop-shadow(0 0 12px var(--s4, #9b5cff)); }
+body:is(.str-two, .str-each) .board .string.s5 { stroke: var(--s5); opacity: .95; }
+body:is(.str-two, .str-each) .board .note.play.s5 circle, body:is(.str-two, .str-each) .board .fx-trail.s5 { fill: var(--s5); }
+body:is(.str-two, .str-each) .board .fx-string.s5 { stroke: var(--s5); filter: drop-shadow(0 0 8px var(--s5)); }
+body.neon:is(.str-two, .str-each) .board .string.s5 { filter: drop-shadow(0 0 3px var(--s5)); }
+body.neon .board .note.play.s5 circle { filter: drop-shadow(0 0 12px var(--s5, #9b5cff)); }
+body:is(.str-two, .str-each) .board .note.play text { fill: #0b0716; }
+body.neon:not(.str-two):not(.str-each) .board .string { stroke: #8f86ff; filter: drop-shadow(0 0 3px #8f86ff); }
+body.neon:not(.str-two):not(.str-each) .board .note.play circle { fill: #9b5cff; }
+body.neon .board .note.play circle { stroke: #fff; stroke-width: 3; }
+
+/* ---------- Options window ---------- */
+.pop-card.opts { gap: 14px; }
+.o-sec { display: grid; gap: 9px; padding: 12px 14px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+.o-sec h4 { margin: 0 0 2px; font-size: 11px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.o-item { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.o-label { width: 130px; flex-shrink: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+.o-help { margin: -3px 0 0 142px; font-size: 12.5px; color: var(--muted); }
+.o-help:empty { display: none; }
+.o-nudge { display: inline-flex; align-items: center; gap: 8px; } .o-nudge b { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.o-links { display: flex; gap: 8px; flex-wrap: wrap; }
+/* pill buttons instead of dropdowns */
+select.pilled { display: none !important; }
+.pills { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 11px; background: var(--card); border: 1px solid var(--line); }
+.pill-b { font: 600 13px var(--font); padding: 5px 11px; border-radius: 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.pill-b:hover { color: var(--text); }
+.pill-b.on { background: var(--accent); color: #1a1208; }
+
+/* switches instead of checkboxes */
+.o-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.o-switch input { display: none; }
+.o-switch i { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--line); flex-shrink: 0; transition: background .15s; }
+.o-switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.o-switch input:checked + i { background: var(--accent); }
+.o-switch input:checked + i::after { transform: translateX(18px); }
+.o-switch em { font-style: normal; color: var(--muted); font-size: 12.5px; }
+
+.part-btns.many { max-width: 46vw; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+
+/* Options: switches keep normal text; a bit wider so choices sit next to their labels */
+.pop-card label.o-switch { display: flex; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 500; color: var(--text); }
+.pop-card.opts { width: min(700px, 94vw); }
+.pop-card.opts .pills { max-width: 520px; }
+body.neon .pill-b.on { background: #9b5cff; color: #fff; }
+body.neon .pill-b { background: transparent; }
+/* a pick: the string shimmers, a ring pulses out from the note */
+.board .fx-shimmer { fill: none; stroke-width: 2.5; stroke: #ffd27a; }
+body:is(.str-two, .str-each) .board .fx-shimmer { stroke: var(--sc, #ffd27a); }
+.board .fx-ring { fill: none; stroke-width: 3; stroke: #ffd27a; }
+
+/* sync label: top right of the tab (the top left shows the bar's chord) */
+.tab-sync { left: auto; right: 12px; }
+/* full screen = only the tab (with its options) and the fretboard */
+body.pl-focus #view-play { padding-top: 10px; }
+
+body.pl-focus .highway { height: 44vh; }
+/* full screen: a bigger tab */
+body.pl-focus .tabstrip { height: 300px; }
+body.pl-focus .tnote { font-size: 18px; }
+body.pl-focus .tchord { font-size: 21px; }
+body.pl-focus .tsec, body.pl-focus .tnum { font-size: 13px; }
+body.pl-focus .tname { font-size: 14px; }
+body.pl-focus .tflag { font-size: 12px; }
+body.pl-focus .tlyric { font-size: 23px; }
+
+/* sync status: a small pill in the tab's header row (never over the tab) */
+.pl-ph .tab-sync { position: static; flex-shrink: 0; white-space: nowrap; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+.pl-ph .tab-sync.ok { color: #39d98a; border-color: color-mix(in srgb, #39d98a 40%, var(--line)); }
+.pl-ph .tab-sync.hidden { display: none; }
+body.pl-focus .tnum { font-size: 12px; }
+
+/* barre: one finger across several strings */
+.board .fx-barre { fill: rgba(255, 210, 122, .22); stroke: #ffd27a; stroke-width: 2.5; }
+.board .fx-barre.main { fill: rgba(255, 210, 122, .32); stroke-width: 3.5; filter: drop-shadow(0 0 6px rgba(255, 210, 122, .7)); }
+.board .fx-barre-label { fill: #ffd27a; font: 800 12px var(--font); text-anchor: middle; letter-spacing: .5px; }
+body.neon .board .fx-barre { fill: rgba(155, 92, 255, .25); stroke: #c9b0ff; }
+body.neon .board .fx-barre.main { fill: rgba(155, 92, 255, .35); stroke: #e2d4ff; filter: drop-shadow(0 0 10px #9b5cff); }
+body.neon .board .fx-barre-label { fill: #e2d4ff; }
+
+/* barre: covered strings (another finger sounds higher) */
+.board .fx-barre-under { fill: rgba(11, 7, 22, .45); }
+.board .fx-barre-ring { fill: none; stroke: #ffd27a; stroke-width: 2; opacity: .8; }
+.board .fx-barre-link { stroke: #ffd27a; stroke-width: 2; stroke-dasharray: 2 5; opacity: .7; }
+body.neon .board .fx-barre-ring, body.neon .board .fx-barre-link { stroke: #e2d4ff; }
+/* more techniques */
+.board .fx-ringing { fill: none; stroke: #ffd27a; stroke-width: 3; }
+body:is(.str-two, .str-each) .board .fx-ringing { stroke: #fff; }
+.board .fx-strum line { stroke: #fff; stroke-width: 4; stroke-linecap: round; }
+.board .fx-strum path { fill: #fff; }
+.board .fx-strum text { fill: #fff; font: 800 11px var(--font); text-anchor: end; }
+.board .fx-palm rect { fill: rgba(255, 255, 255, .1); stroke: rgba(255, 255, 255, .45); stroke-width: 2; stroke-dasharray: 5 4; }
+.board .fx-palm text { fill: #fff; font: 800 11px var(--font); text-anchor: middle; opacity: .8; }
+.board .note.dead path { stroke: #d6d3e8; stroke-width: 4; stroke-linecap: round; }
+.board .note.harm path:first-of-type { fill: #fff; stroke: #ffd27a; stroke-width: 3; }
+.board .note.harm .spark { stroke: #ffd27a; stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.board .note.harm text { fill: #1a1208; }
+.board .note.ghost circle { fill: transparent !important; stroke-dasharray: 5 4; stroke-width: 3; }
+.board .note.muted circle { filter: saturate(.5) brightness(.85); }
+.board .fx-pick { fill: #fff; font: 900 14px var(--font); text-anchor: middle; }
+
+/* full screen (the earlier layout): title, Jam/Learn, chord boxes, a big tab, the fretboard at its normal size */
+body.pl-focus .board-wrap { flex: none; }
+body.pl-focus .board { height: 300px; }
+/* the normal page: a bigger tab */
+.tabstrip { height: 250px; }
+.tnote { font-size: 15px; } .tchord { font-size: 17px; } .tlyric { font-size: 19px; }
+
+/* "Show" drop-downs (cleaner than rows of switches) */
+details.dd { position: relative; flex-shrink: 0; }
+details.dd > summary { list-style: none; cursor: pointer; font: 600 12.5px var(--font); padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text); background: var(--card); user-select: none; }
+details.dd > summary::-webkit-details-marker { display: none; }
+details.dd > summary::after { content: " \25BE"; color: var(--muted); }
+details.dd[open] > summary { border-color: var(--accent); }
+.dd-menu { position: absolute; z-index: 9; top: calc(100% + 6px); left: 0; display: grid; gap: 6px; min-width: 190px; padding: 10px;
+  border-radius: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 12px 30px #0008; }
+.dd-menu .kicker { margin: 0 0 2px 2px; }
+.dd-menu .chip-t { justify-content: flex-start; text-align: left; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 10px; }
+
+body.neon button.song { background: transparent; color: var(--text); border: 0; }
+body.neon button.song span { color: var(--muted); }
+/* Song chords pop-up: rows close together */
+.np-map { gap: 6px; }
+.np-map .sec { padding: 6px 12px; margin: 0; }
+.play-btn { width: 30px; height: 30px; border-radius: 50%; padding: 0; font-size: 12px; display: inline-grid; place-items: center; }
+
+/* lyrics: one lane, easy to read */
+.tlyric { font: 700 17px -apple-system, "SF Pro Rounded", var(--font); fill: #5a5047; letter-spacing: .1px; }
+.tlyric.first { fill: #1c1712; }
+.tlyric.dash { fill: #b4a898; font-weight: 600; letter-spacing: 1px; }
+.tlyric.on { fill: #e8461a; }
+body.neon .tlyric { fill: #a9a7d8; } body.neon .tlyric.first { fill: #f1f0ff; } body.neon .tlyric.dash { fill: #5d5b99; }
+body.neon .tlyric.on { fill: #c9b0ff; }
+body.pl-focus .tlyric { font-size: 24px; }
+
+.board .sname { text-anchor: middle; }
+.board .fx-open rect { fill: #ffd27a; filter: drop-shadow(0 0 8px rgba(255, 210, 122, .9)); }
+.board .fx-open text { fill: #1a1208; font: 900 16px var(--font); text-anchor: middle; }
+body:is(.str-two, .str-each) .board .fx-open rect { fill: var(--sc, #ffd27a); }
+body:is(.str-two, .str-each) .board .fx-open.s0 rect { fill: var(--s0); filter: drop-shadow(0 0 10px var(--s0)); }
+body:is(.str-two, .str-each) .board .fx-open.s1 rect { fill: var(--s1); filter: drop-shadow(0 0 10px var(--s1)); }
+body:is(.str-two, .str-each) .board .fx-open.s2 rect { fill: var(--s2); filter: drop-shadow(0 0 10px var(--s2)); }
+body:is(.str-two, .str-each) .board .fx-open.s3 rect { fill: var(--s3); filter: drop-shadow(0 0 10px var(--s3)); }
+body:is(.str-two, .str-each) .board .fx-open.s4 rect { fill: var(--s4); filter: drop-shadow(0 0 10px var(--s4)); }
+body:is(.str-two, .str-each) .board .fx-open.s5 rect { fill: var(--s5); filter: drop-shadow(0 0 10px var(--s5)); }
+
+/* the hand shape: notes still pressed but not sounding */
+.board .fx-held { fill: rgba(80, 170, 255, .22); stroke: rgba(120, 190, 255, .75); stroke-width: 2; stroke-dasharray: 4 3; }
+.board .fx-barre.idle { opacity: .55; }
+
+/* ---------- Play is the main page; the others are windows over it ---------- */
+.tabs-sep { width: 1px; align-self: stretch; margin: 4px 4px; background: var(--line); }
+.view.win { position: fixed; z-index: 6; top: 64px; left: 50%; transform: translateX(-50%); width: min(1220px, calc(100vw - 48px));
+  bottom: 22px; overflow: auto; border-radius: 18px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 24px 80px #000c; }
+body.win-open #view-play { filter: blur(3px) brightness(.55); pointer-events: none; }
+.win-close { position: sticky; top: 10px; float: right; margin: 10px 12px 0 0; z-index: 3; }
+#view-songsterr.win { display: flex; flex-direction: column; overflow: hidden; }
+#view-settings .panel { padding-top: 22px; }
+#view-settings .o-sec { margin-bottom: 14px; }
+/* auto-hiding top bars */
+.top, .pl-top { transition: transform .25s ease, opacity .25s ease, margin .25s ease; }
+body.bars-hidden .top { transform: translateY(-100%); opacity: 0; margin-bottom: -62px; }
+body.bars-hidden .pl-actions { opacity: 0; pointer-events: none; }
+/* key box: off unless chosen */
+body.no-key .np-box:has(#pl-key) { display: none; }
+/* More menu */
+details.dd.more .dd-menu.right { left: auto; right: 0; min-width: 210px; }
+details.dd.more .seg { width: 100%; } details.dd.more .seg .seg-b { flex: 1; }
+/* sound output */
+.out-icon { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); }
+.out-icon:empty { display: none; }
+.out-icon i { width: 14px; height: 14px; display: inline-block; background: currentColor; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; }
+.out-icon i.spk { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 6h3l4-3v10L5 10H2z'/%3E%3Cpath d='M11 5c1.5 1.5 1.5 4.5 0 6M13 3c2.7 2.7 2.7 7.3 0 10' stroke='black' fill='none' stroke-width='1.5'/%3E%3C/svg%3E"); }
+.out-icon i.amp { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='14' height='11' rx='2'/%3E%3C/svg%3E"); }
+.out-icon i.mac { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='2' width='14' height='9' rx='1.5'/%3E%3Crect x='5' y='12' width='6' height='2'/%3E%3C/svg%3E"); }
+
+/* guitar part buttons: kind + how much it plays */
+.pl-ph .part-b { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; padding: 4px 10px 4px 5px; position: relative; }
+.part-b .pk { font: 800 9.5px var(--font); letter-spacing: .5px; padding: 2px 5px; border-radius: 5px; background: var(--line); color: var(--muted); }
+.part-b.on .pk { background: rgba(0, 0, 0, .2); color: inherit; }
+.part-b .share { display: block; width: 34px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.part-b .share b { display: block; height: 100%; background: currentColor; opacity: .8; }
+.part-b.auto { outline: 2px dashed currentColor; outline-offset: 2px; }
+
+/* techniques on the tab, as shapes */
+.tq-arc, .tq-bend, .tq-vib, .tq-head, .tq-strum { fill: none; stroke: #b45f00; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tq-slide { stroke: #b45f00; stroke-width: 2.2; stroke-linecap: round; }
+.tq-strum { stroke: #8a7f70; stroke-width: 1.6; }
+body.neon :is(.tq-arc, .tq-bend, .tq-vib, .tq-head) { stroke: #ffd27a; } body.neon .tq-slide { stroke: #ffd27a; } body.neon .tq-strum { stroke: #7e7cc0; }
+
+.board .fx-shimmer { stroke-width: 3; }
+.foot-help { max-width: 760px; }
+details.howto { margin: -4px 0 -2px; font-size: 13px; color: var(--muted); }
+details.howto summary { cursor: pointer; width: max-content; list-style: none; }
+details.howto summary::before { content: "? "; font-weight: 800; color: var(--accent); }
+.howto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 18px; padding: 10px 2px 4px; }
+.howto-grid span { display: flex; align-items: center; gap: 8px; } .howto-grid b { color: var(--text); font-family: "SF Mono", Menlo, monospace; }
+.howto-grid svg { flex-shrink: 0; overflow: visible; }
+.lg.held { width: 16px; height: 16px; border-radius: 50%; background: rgba(80,170,255,.22); border: 2px dashed rgba(120,190,255,.75); }
+
+/* ---------- Song chords mode ---------- */
+body.sheet-mode #tabstrip, body.sheet-mode #highway, body.sheet-mode details.howto { display: none !important; }
+body.sheet-mode .pl-ph[data-panel="tab"] > :not(.view-seg) { display: none !important; }  /* the view switch stays: the way back */
+.sheet { display: grid; gap: 12px; flex-shrink: 0; }
+.sheet-chords { display: flex; gap: 8px; flex-wrap: wrap; }
+.cd-btn { padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+.cd-btn:hover { border-color: var(--accent); }
+.sheet-lines { height: 46vh; overflow: auto; padding: 8px 18px 40vh; border-radius: 16px; background: var(--card); border: 1px solid var(--line);
+  font-family: "SF Mono", Menlo, monospace; scroll-behavior: smooth; }
+.sh-sec { margin: 18px 0 6px; font: 800 12px var(--font); letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.sh-line { position: relative; padding: 4px 8px; border-radius: 10px; margin: 2px 0; transition: background .2s, opacity .2s; }
+.sh-line.past { opacity: .45; }
+.sh-line.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sh-top { position: relative; height: 1.4em; font-size: 16px; }
+.sh-c { position: absolute; top: 0; font-weight: 800; color: #1d9a4a; cursor: pointer; }
+.sh-c.solo { position: static; margin-right: 18px; font-size: 18px; }
+.sh-c:hover { text-decoration: underline; }
+.sh-text { font-size: 19px; white-space: pre; color: var(--text); }
+.sh-dim { color: var(--muted); font-size: 14px; }
+.sh-line.inst { display: flex; flex-wrap: wrap; align-items: center; padding: 8px; }
+body.neon .sh-c { color: #39ff88; }
+#pl-chords.on { border-color: var(--accent); color: var(--accent); }
+/* chord diagrams */
+.cd .cd-l { stroke: var(--muted); stroke-width: 1.2; } .cd .cd-nut { fill: var(--text); }
+.cd .cd-name { fill: var(--text); font: 800 13px var(--font); text-anchor: middle; }
+.cd .cd-fret { fill: var(--muted); font: 700 10px var(--font); text-anchor: end; }
+.cd .cd-dot, .cd .cd-barre { fill: var(--accent); } .cd .cd-fg { fill: #1a1208; font: 800 9px var(--font); text-anchor: middle; }
+.cd .cd-o { fill: none; stroke: var(--text); stroke-width: 1.4; } .cd .cd-x { fill: var(--muted); font: 700 10px var(--font); text-anchor: middle; }
+.cd-pop { width: min(360px, 92vw); justify-items: center; text-align: center; }
+#pl-chord { cursor: pointer; }
+
+/* practice mode */
+.practice-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.practice-bar .seg-b { padding: 5px 12px; font-size: 13px; }
+.yt-box { margin-left: auto; width: 240px; height: 135px; border-radius: 10px; overflow: hidden; background: #000; }
+body.practice #tab-sync { display: none; }
+
+/* party mode */
+body.party-mode #tabstrip, body.party-mode #highway, body.party-mode .pl-ph[data-panel="board"], body.party-mode .board-wrap, body.party-mode details.howto, body.party-mode .pl-foot { display: none !important; }
+.party { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 12px; }
+.party-part { padding: 10px 12px 6px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.party-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.party-head .pk { font: 800 9.5px var(--font); padding: 2px 5px; border-radius: 5px; background: var(--line); color: var(--muted); }
+.party-head .sub { margin-left: auto; font-size: 12px; }
+.party-board { height: 190px; }
+.party-head .sub { font-family: "SF Mono", Menlo, monospace; letter-spacing: 1px; }
+
+.pr-secs { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pr-secs .chip-t.on { background: var(--accent); color: #1a1208; border-color: var(--accent); }
+
+/* windows: centred with margins, not a transform (the slide-in animation replaced the transform, so the Songsterr
+   browser measured its place half a window to the right) */
+.view.win { left: 0; right: 0; margin: 0 auto; transform: none; }
+
+
+body.no-boxes .np-box.np-info { display: none; }
+.trep { stroke: #8c8174; stroke-width: 2.5; stroke-linecap: round; }
+.tb.on .trep { stroke: #e8461a; stroke-width: 3.5; }
+.tbg.rep { fill: transparent; }
+body.neon .trep { stroke: #6d6aa8; } body.neon .tb.on .trep { stroke: #c9b0ff; }
+.pl-heads.quiet { display: none; }
+
+/* the Play page, calmer: each control sits next to what it changes (no button row under the song, no More menu) */
+body.party-mode .pl-ph[data-panel="tab"] > :not(#tab-partbox), body.party-mode #part-btns, body.party-mode #tab-partbox .kicker { display: none !important; }
+.pill-btn { cursor: pointer; font-family: inherit; background: transparent; }
+.pill-btn:hover { color: var(--text, #fff); border-color: var(--muted); }
+.brand { white-space: nowrap; min-width: 0; } .brand .song-chip { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.all-b { margin-left: 2px; }
+.all-b.on { background: var(--accent, #f5a524); color: #1a1205; }
+.pl-ph[data-panel="board"] .pl-mode { margin-left: 4px; }
+.o-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.pl-ph[data-panel="board"] .pl-mode .seg-b { font-size: 13px; padding: 5px 12px; }
+body.pl-focus .top { background: transparent; border: 0; justify-content: flex-end; }
+.tmute { stroke: #9a8f82; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 3; }
+.tb.on .tmute { stroke: #e8461a; }
+body.neon .tmute { stroke: #5d5b99; }
+/* room for: tab, technique words, strum arrows, two lyric lanes (nothing overlaps) */
+.tabstrip { height: 272px; }
+body.pl-focus .tabstrip { height: 336px; }
+.tq-strum { stroke-width: 2.2; }
+.fx-mute line { stroke: #8f8a84; stroke-width: 4; }
+.fx-mute rect { fill: #8f8a84; }
+.fx-incoming { fill: none; stroke-width: 3; stroke-dasharray: 5 4; }
