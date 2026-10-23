@@ -19,6 +19,12 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 - **Practice mode.** Plays the song at 50%, 75% or 100% speed, loops a section, and offers backing tracks.
 - **Jam mode.** Highlights chord tones and safe notes for improvising over the song.
 
+## Engineering angle
+
+- **Time-series alignment:** the tab's timeline is matched to a live recording that drifts in tempo, pauses and restarts, by listening to the audio and cross-checking the sung words, then correcting continuously.
+- **Choosing the best of several options:** for each song, several community tabs exist; the app scores them against the recording's length and completeness and picks the closest match.
+- **Designed around the user:** every view (tab, fretboard, lyrics, practice speed) was shaped by daily use and repeated feedback, the way a product is refined through voice-of-the-customer loops.
+
 ## How it connects
 
 - **The app itself:** a small web server that runs only on the Mac (`127.0.0.1:5070`), shown in a native macOS window. Nothing is open to the internet.
