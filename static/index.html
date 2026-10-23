@@ -21,7 +21,7 @@
       <button class="tab win" data-tab="settings">Settings</button>
     </nav>
     <div class="status">
-      <button class="pill pill-btn" id="pl-practice" title="Pick a song: MasterPrac plays it itself, exactly in sync with the tab">Practice a song</button>
+      <div class="seg mode-seg" id="mode-seg"><button class="seg-b on" data-appmode="follow" title="Play songs in Spotify (or YouTube, Music...): MasterPrac follows along">Follow Spotify</button><button class="seg-b" data-appmode="play" title="MasterPrac plays the song itself, so the tab is always exactly in sync. Starts with the song Spotify is playing, or search one">Play here</button></div>
       <button class="pill pill-btn" id="pl-full" title="A bigger tab over the whole screen (Esc to leave)">Full screen</button>
       <span class="pill" id="pill-sound" title="Where the Mac's sound plays">Sound</span>
       <span class="pill" id="pill-spotify" title="Spotify while you practise">Spotify</span>
@@ -55,12 +55,13 @@
     </div>
 
     <div class="practice-bar hidden" id="practice-bar">
-      <span class="kicker">PRACTICE MODE</span>
+      <span class="kicker">PLAY HERE</span>
       <div class="seg"><button class="seg-b on" data-pkind="song">Original song</button><button class="seg-b" data-pkind="backing" id="pk-backing">Backing track (no guitar)</button></div>
-      <div class="seg"><button class="seg-b" data-speed="0.5">50%</button><button class="seg-b" data-speed="0.75">75%</button><button class="seg-b on" data-speed="1">100%</button></div>
+      <div class="seg"><button class="seg-b" data-speed="0.25">25%</button><button class="seg-b" data-speed="0.5">50%</button><button class="seg-b" data-speed="0.75">75%</button><button class="seg-b on" data-speed="1">100%</button></div>
       <span class="sub" id="practice-note">Exactly in sync: the tab follows the video's own clock.</span>
       <button class="ghost" id="practice-lesson" title="Video lessons for this song (opens in the Songsterr window's browser)">Watch a lesson</button>
-      <button class="ghost" id="practice-exit">Leave practice</button>
+      <button class="ghost" id="practice-other">Change song</button>
+      <button class="ghost" id="practice-exit">Back to Spotify</button>
       <div class="pr-secs" id="pr-secs"></div>
       <div class="yt-box" id="yt-box"><div id="yt"></div></div>
     </div>
@@ -184,7 +185,7 @@
     <form class="ver-paste" id="ver-paste"><input id="ver-url" placeholder="Or paste any Songsterr tab link..." autocomplete="off"><button type="submit">Use this link</button></form>
   </div></div>
   <div class="pop hidden" id="pop-practice"><div class="pop-card wide">
-    <div class="pop-head"><b>Practice a song</b><button class="ghost icon" data-close>&#10005;</button></div>
+    <div class="pop-head"><b>Play here</b><button class="ghost icon" data-close>&#10005;</button></div>
     <p class="explain">MasterPrac plays the recording Songsterr's tab is timed to (or a backing track without the guitar), so everything is exactly in sync. Spotify pauses.</p>
     <form class="ver-paste" id="pr-form"><input id="pr-q" placeholder="Search a song or artist..." autocomplete="off"><button type="submit">Search</button></form>
     <div class="ver-list" id="pr-list"></div>

@@ -1734,9 +1734,9 @@ async function startPractice(id, title, artist) {
   fetch("/api/player/pause", { method: "POST" }).catch(() => {});  // Spotify pauses, so you don't hear two songs
   PR.on = true; PR.ready = false; SYNC.on = false;
   P.info = { title, artist, app: "MasterPrac", playing: false, pos: 0, at: Date.now() / 1000, duration: 0, latency: P.info ? P.info.latency : 0, match: { id } };
-  $("#pl-app").textContent = "PRACTICE MODE"; $("#pl-title").textContent = title; $("#pl-artist").textContent = artist;
+  $("#pl-app").textContent = "PLAYING HERE · ALWAYS IN SYNC"; $("#pl-title").textContent = title; $("#pl-artist").textContent = artist;
   P.songId = id; P.offset = 0;
-  document.body.classList.add("practice"); $("#practice-bar").classList.remove("hidden");
+  document.body.classList.add("practice"); $("#practice-bar").classList.remove("hidden"); setModeSeg("play");
   await loadTab(id, null);
   const d = P.tab;
   if (!d || d.error || !(d.videos || []).length) { toast("This tab has no recording to practise with"); stopPractice(); return; }
@@ -1766,14 +1766,26 @@ async function playVideo(kind, skip = 0) {
 function stopPractice() {
   PR.on = false; PR.ready = false; SYNC.on = $("#o-autosync").checked;
   if (PR.yt) { PR.yt.destroy(); PR.yt = null; }
-  document.body.classList.remove("practice"); $("#practice-bar").classList.add("hidden");
+  document.body.classList.remove("practice"); $("#practice-bar").classList.add("hidden"); setModeSeg("follow");
   P.info = null; P.songId = null; pollNow();
+}
+function setModeSeg(mode) {
+  document.querySelectorAll("[data-appmode]").forEach((b) => b.classList.toggle("on", b.dataset.appmode === mode));
+}
+// Play here: start with the song Spotify is on (its tab is already found); nothing playing -> search
+function playHere() {
+  const i = P.info;
+  if (!PR.on && P.songId && i && i.title) { startPractice(P.songId, i.title, i.artist || ""); return; }
+  setModeSeg(PR.on ? "play" : "follow");
+  openPop("#pop-practice"); prShow(null); setTimeout(() => $("#pr-q").focus(), 50);
 }
 $("#pr-form").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#pr-q").value.trim(); if (q) prSearch(q); });
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.id === "pl-practice") { openPop("#pop-practice"); prShow(null); setTimeout(() => $("#pr-q").focus(), 50); }
+  if (b.dataset.appmode === "play" && !PR.on) playHere();
+  if (b.dataset.appmode === "follow" && PR.on) stopPractice();
+  if (b.id === "practice-other") { openPop("#pop-practice"); prShow(null); setTimeout(() => $("#pr-q").focus(), 50); }
   if (b.dataset.practice) startPractice(Number(b.dataset.practice), b.dataset.title, b.dataset.artist);
   if (b.id === "practice-exit") stopPractice();
   if (b.dataset.pkind && PR.on) playVideo(b.dataset.pkind);

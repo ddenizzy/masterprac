@@ -642,3 +642,7 @@ body.pl-focus .tabstrip { height: 336px; }
 .fx-mute line { stroke: #8f8a84; stroke-width: 4; }
 .fx-mute rect { fill: #8f8a84; }
 .fx-incoming { fill: none; stroke-width: 3; stroke-dasharray: 5 4; }
+
+/* Follow Spotify | Play here switch in the top bar */
+.mode-seg { align-self: center; }
+.mode-seg .seg-b { padding: 4px 12px; font-size: 13px; white-space: nowrap; }
