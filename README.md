@@ -4,6 +4,10 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 
 <p align="center"><img src="assets/icon.png" width="128" alt="MasterPrac icon"></p>
 
+![MasterPrac demo: tab, fretboard and lyrics in sync, fretboard options, all guitars, Guitar Hero-style highway, song chords and practice mode at 75% speed](screenshots/demo.gif)
+
+*Demo at 2x speed, no sound. [Full video (52 s)](screenshots/demo.mp4)*
+
 ![MasterPrac playing Ob-La-Di, Ob-La-Da](screenshots/play.png)
 
 ## What it does
@@ -14,6 +18,10 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 - **Word-timed lyrics.** Lyrics move with the tab, each word at the moment it is sung.
 - **Practice mode.** Plays the song at 50%, 75% or 100% speed, loops a section, and offers backing tracks.
 - **Jam mode.** Highlights chord tones and safe notes for improvising over the song.
+
+## AI features (optional)
+
+Two extras use Claude, through Claude Code if it is installed: the per-song amp tone guide and the "Ask" box on the Learn page. The core of the app (tab sync, fretboard, lyrics, practice and jam modes) runs without it.
 
 ## Built with
 
