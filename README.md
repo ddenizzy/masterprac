@@ -27,7 +27,7 @@ A macOS guitar practice app that follows whatever song is playing in Spotify and
 
 ## AI features (optional)
 
-Two extras use Claude, through Claude Code if it is installed: the per-song amp tone guide and the "Ask" box on the Learn page. The core of the app (tab sync, fretboard, lyrics, practice and jam modes) runs without it.
+Two extras use an AI model, if one is set up on the Mac: the per-song amp tone guide and the "Ask" box on the Learn page. The core of the app (tab sync, fretboard, lyrics, practice and jam modes) runs without it.
 
 ## Built with
 
