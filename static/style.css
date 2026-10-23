@@ -646,3 +646,10 @@ body.pl-focus .tabstrip { height: 336px; }
 /* Follow Spotify | Play here switch in the top bar */
 .mode-seg { align-self: center; }
 .mode-seg .seg-b { padding: 4px 12px; font-size: 13px; white-space: nowrap; }
+.o-adv summary { list-style: none; cursor: pointer; }
+.o-adv summary::-webkit-details-marker { display: none; }
+.o-adv summary h4 { display: inline; }
+.o-adv summary h4::before { content: "\25B8  "; }
+.o-adv[open] summary h4::before { content: "\25BE  "; }
+.o-adv summary em { font-style: normal; color: var(--muted); letter-spacing: 0; text-transform: none; font-weight: 600; }
+.o-help-full { margin-left: 0; }

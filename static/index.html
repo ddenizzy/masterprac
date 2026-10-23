@@ -127,50 +127,44 @@
       <h2>Settings</h2>
 
 
-    <section class="o-sec"><h4>Look</h4>
+    <section class="o-sec"><h4>Play page</h4>
       <div class="o-item"><span class="o-label">Style</span>
         <select id="o-look"><option value="classic">Classic</option><option value="neon">Neon</option></select></div>
       <div class="o-item"><span class="o-label">String colours</span>
         <select id="o-strings"><option value="off">Off</option><option value="two">Two colours</option><option value="each">Each string</option></select></div>
       <p class="o-help">Two colours alternate strings (easy to follow); each string is Guitar Hero style.</p>
-    </section>
-
-    <section class="o-sec"><h4>Fretboard</h4>
-      <div class="o-item"><span class="o-label">Notes</span>
-        <select id="o-scale"><option value="pent">5 safest</option><option value="full">All 7 of the key</option><option value="blues">Bluesy</option><option value="chord">Only the chord now</option></select></div>
-      <p class="o-help" id="o-scale-help"></p>
-      <label class="o-switch"><input type="checkbox" id="o-realfrets"><i></i><span>Real guitar fret spacing <em>(off = an even grid, easier to read)</em></span></label>
-      <div class="o-item"><span class="o-label">Dots show</span>
-        <select id="o-labels"><option value="names">Note names</option><option value="intervals">Note jobs (R, b3, 5)</option></select></div>
-      <div class="o-item"><span class="o-label">Part of the neck</span>
-        <select id="o-area"><option value="all">Whole neck</option><option value="1">Box 1</option><option value="2">Box 2</option><option value="3">Box 3</option><option value="4">Box 4</option><option value="5">Box 5</option></select></div>
-      <p class="o-help">A box is one hand position (about 4 frets). Learn Box 1 first.</p>
-    </section>
-
-    <section class="o-sec"><h4>Song &amp; timing</h4>
-      <div class="o-item"><span class="o-label">Chords from</span>
-        <select id="o-src"><option value="tab">The tab (exact)</option><option value="ear">Listening</option></select></div>
-      <label class="o-switch"><input type="checkbox" id="o-autosync" checked><i></i><span>Sync the tab to the music by listening</span></label>
-      <div class="o-item"><span class="o-label">Early / late?</span>
-        <span class="o-nudge"><button class="ghost icon" data-nudge="-0.25" title="They come too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="They come too early">+</button></span></div>
-    </section>
-
-    <section class="o-sec"><h4>Play page</h4>
-      <div class="o-row"><span>Look</span><div class="seg look-seg"><button class="seg-b" data-look="classic">Classic</button><button class="seg-b" data-look="neon">Neon</button></div></div>
       <label class="o-switch"><input type="checkbox" id="o-showboxes"><i></i><span>Show the chord now / next / where boxes</span></label>
       <label class="o-switch"><input type="checkbox" id="o-showkey"><i></i><span>Show the key box</span></label>
       <label class="o-switch"><input type="checkbox" id="o-autohide" checked><i></i><span>Hide the top bars when I'm not using them <em>(move the mouse to the top to see them)</em></span></label>
+      <label class="o-switch"><input type="checkbox" id="o-mute"><i></i><span>Mute Spotify while I practise <em>(it keeps playing, so your listening counts)</em></span></label>
     </section>
 
     <section class="o-sec"><h4>Guitar part</h4>
-      <label class="o-switch"><input type="checkbox" id="o-autopart" checked><i></i><span>Switch to a guitar that's playing when mine rests</span></label>
       <div class="o-item"><span class="o-label">I prefer</span>
         <select id="o-prefer"><option value="any">Any guitar</option><option value="electric">Electric</option><option value="acoustic">Acoustic</option></select></div>
+      <label class="o-switch"><input type="checkbox" id="o-autopart" checked><i></i><span>When my guitar rests, switch to one that's playing</span></label>
     </section>
 
-    <section class="o-sec"><h4>Sound</h4>
-      <label class="o-switch"><input type="checkbox" id="o-mute"><i></i><span>Mute Spotify while I practise <em>(it keeps playing, so your listening counts)</em></span></label>
+    <section class="o-sec"><h4>Fretboard</h4>
+      <div class="o-item"><span class="o-label">Notes to show</span>
+        <select id="o-scale"><option value="pent">5 safest</option><option value="full">All 7 of the key</option><option value="blues">Bluesy</option><option value="chord">Only the chord now</option></select></div>
+      <p class="o-help" id="o-scale-help"></p>
+      <div class="o-item"><span class="o-label">Dots show</span>
+        <select id="o-labels"><option value="names">Note names (C, E, G)</option><option value="intervals">Role in the chord (R = root, 3, 5)</option></select></div>
+      <div class="o-item"><span class="o-label">Part of the neck</span>
+        <select id="o-area"><option value="all">Whole neck</option><option value="1">Hand position 1</option><option value="2">Hand position 2</option><option value="3">Hand position 3</option><option value="4">Hand position 4</option><option value="5">Hand position 5</option></select></div>
+      <p class="o-help">One hand position covers about 4 frets. Start with position 1.</p>
+      <label class="o-switch"><input type="checkbox" id="o-realfrets"><i></i><span>Real guitar fret spacing <em>(off = an even grid, easier to read)</em></span></label>
     </section>
+
+    <details class="o-sec o-adv"><summary><h4>Fixing sync <em>(Follow Spotify only)</em></h4></summary>
+      <p class="o-help o-help-full">Only needed if the tab runs ahead or behind the music. <b>Play here</b> is always in sync.</p>
+      <label class="o-switch"><input type="checkbox" id="o-autosync" checked><i></i><span>Line the tab up with the music by listening</span></label>
+      <div class="o-item"><span class="o-label">Tab early / late?</span>
+        <span class="o-nudge"><button class="ghost icon" data-nudge="-0.25" title="The tab comes too late">&#8722;</button><b id="o-off">+0.00 s</b><button class="ghost icon" data-nudge="0.25" title="The tab comes too early">+</button></span></div>
+      <div class="o-item"><span class="o-label">Chords from</span>
+        <select id="o-src"><option value="tab">The tab (exact)</option><option value="ear">Listening (for songs with no tab)</option></select></div>
+    </details>
 
     <div class="o-links"><button class="ghost" data-go="amp">Tone for this song &#8594;</button><button class="ghost" data-go="learn">How keys work &#8594;</button></div>
 
